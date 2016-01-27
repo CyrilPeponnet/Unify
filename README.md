@@ -64,7 +64,7 @@ The following tags can be used with `vhost` (but are not mandatory, depending on
 |----------------|------------------------|---------------------------|
 | `tcp` or `http` or `https`          | `80`           | Specify the proto and the port. http 80 and https 443 are guessed automaticaly. If no port is provided it will be guessed from the container. |
 | `url`          | `/api`            | The url your service will match. |
-| `check`        | `OPTIONS /api/events` | If you need to set a specific check (see haproxy documentation). If not speficied, the defualt value will be added. |
+| `check`        | `OPTIONS /api/events` | If you need to set a specific check (see haproxy documentation). If not speficied, the default value will be added. If set to `disabled` then the checks will be disabled for this entry. |
 | `balance`      | `leastconn`      | The balance type to use. See haproxy documentation (roundrobin by default). |
 | `ssl`          | `backend`              | SSL type you want to use between `backend`, `offloading`, `bridge` or `pass-through` (see details below).|
 
