@@ -276,6 +276,37 @@ backend bk_service-1
 """
         self._assertEquals(name, _services, _generate_conf(_services, "tests/test.jinja2"), _expected)
 
+    def test_one_node_bk_80_ft_80_with_api_and_no_check(self):
+        name = "One node backend 80, frontend 80 with options"
+        _services = [
+        {
+            "name": "service-1",
+            "ip": "10.0.0.1",
+            "port": "1200",
+            "id": "node1:80",
+            "tags": [
+                    "dns=domain.tld",
+                    "vhost=test",
+                    "http=80",
+                    "url=/api",
+                    r"check=disabled"
+                    ]
+        }
+        ]
+        _expected =r"""
+frontend http-in
+    bind :80 name http
+    mode http
+    reqadd X-Forwarded-Proto:\ http
+    use_backend bk_service-1 if { hdr(host) -i test.domain.tld } { path_beg -i /api }
+
+backend bk_service-1
+    mode http
+    balance roundrobin
+    server "node1:80" 10.0.0.1:1200
+"""
+        self._assertEquals(name, _services, _generate_conf(_services, "tests/test.jinja2"), _expected)
+
     def test_one_node_bk_443_ft_443_ssl_pass_through(self):
         name = "One node backend 443, frontend 443 ssl-passthrough"
         _services = [

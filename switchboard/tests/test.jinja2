@@ -77,10 +77,12 @@ backend bk_{{group}}
 {%-else%}
     mode http
     balance {% if service.balance%}{{service.balance}}{% else %}roundrobin{% endif %}
-    option httpchk {% if service.check%}{{service.check}}{% else %}HEAD / HTTP/1.1\r\nHost:localhost{% endif %}
+    {%- if service.check != "disabled" %}
+    {% if service.check%}option httpchk {{service.check}}{% else %}option httpchk HEAD / HTTP/1.1\r\nHost:localhost{% endif %}
+    {%- endif %}
 {%- endif %}
 {%- for service in list %}
-    server "{{service.id}}" {{service.ip}}:{{service.port}} check{% if service.ssl in ['backend', 'bridge'] %} ssl verify none{% endif %}
+    server "{{service.id}}" {{service.ip}}:{{service.port}}{%if service.check != "disabled" %} check{% endif %}{% if service.ssl in ['backend', 'bridge'] %} ssl verify none{% endif %}
 {%- endfor %}
 {% endif %}
 {%- endfor %}
