@@ -92,7 +92,7 @@ backend bk_tcp-myapplication-xmpp
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_myapplication-api
     mode http
@@ -106,6 +106,10 @@ backend bk_myapplication-frontend
     option httpchk HEAD / HTTP/1.1\r\nHost:localhost
     server "node1:443" 10.0.0.1:1200 check ssl verify none
     server "node2:443" 10.0.0.2:1200 check ssl verify none
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :443
@@ -185,11 +189,15 @@ backend bk_tcp-myapplication-db
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_myapplication-service
     mode tcp
     server "node3:443" 10.0.0.3:1200 check
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :443

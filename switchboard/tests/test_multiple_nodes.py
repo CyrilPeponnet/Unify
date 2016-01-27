@@ -46,7 +46,7 @@ class TestMultipleService(TestCase):
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_service-1
     mode http
@@ -54,6 +54,10 @@ backend bk_service-1
     option httpchk HEAD / HTTP/1.1\r\nHost:localhost
     server "node1:443" 10.0.0.1:1200 check ssl verify none
     server "node2:443" 10.0.0.2:1202 check ssl verify none
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :80
@@ -104,7 +108,6 @@ frontend http-in
     mode http
     reqadd X-Forwarded-Proto:\ http
     use_backend bk_service-1 if { hdr(host) -i test.domain.tld }
-    redirect scheme https code 301 if !{ ssl_fc }
 
 backend bk_service-1
     mode http
@@ -151,7 +154,6 @@ frontend http-in
     reqadd X-Forwarded-Proto:\ http
     use_backend bk_service-2 if { hdr(host) -i test.domain.tld } { path_beg -i /api }
     use_backend bk_service-1 if { hdr(host) -i test.domain.tld }
-    redirect scheme https code 301 if !{ ssl_fc }
 
 backend bk_service-1
     mode http
@@ -199,7 +201,7 @@ backend bk_service-2
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_service-1
     mode http
@@ -212,6 +214,10 @@ backend bk_service-2
     balance roundrobin
     option httpchk HEAD / HTTP/1.1\r\nHost:localhost
     server "node2:80" 10.0.0.2:1202 check
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :443
@@ -264,7 +270,7 @@ frontend https-in-no-sni
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_service-1
     mode http
@@ -277,6 +283,10 @@ backend bk_service-2
     balance roundrobin
     option httpchk HEAD / HTTP/1.1\r\nHost:localhost
     server "node2:443" 10.0.0.2:1202 check ssl verify none
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :443
@@ -327,7 +337,7 @@ frontend https-in-no-sni
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 
 backend bk_service-1
     mode http
@@ -340,6 +350,10 @@ backend bk_service-2
     balance roundrobin
     option httpchk HEAD / HTTP/1.1\r\nHost:localhost
     server "node2:443" 10.0.0.2:1202 check ssl verify none
+
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
 
 frontend https-in
     bind :443

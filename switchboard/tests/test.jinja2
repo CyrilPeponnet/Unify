@@ -57,12 +57,14 @@ frontend http-in
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} }{% endif %}{% endif %}
         {%- endfor -%}
     {%- endfor %}
-    redirect scheme https code 301 if !{ ssl_fc }
+    {%- if ",".join(services | get_uniq_for_key('https')) -%}
+    default_backend https-redirect
+    {%- endif %}
 {% elif ",".join(services | get_uniq_for_key('https')) %}
 frontend http-in
     bind :80
     mode http
-    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend https-redirect
 {% endif %}
 
 {#- Processing http/s backend -#}
@@ -86,6 +88,10 @@ backend bk_{{group}}
 
 {#- Processing https frontend -#}
 {% if ",".join(services | get_uniq_for_key('https')) %}
+backend https-redirect
+    mode http
+    redirect scheme https code 301 if !{ ssl_fc }
+
 frontend https-in
     bind :{{ ",:".join(services | get_uniq_for_key('https')) }}
     mode tcp
