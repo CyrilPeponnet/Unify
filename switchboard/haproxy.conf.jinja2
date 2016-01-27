@@ -69,9 +69,9 @@ frontend http-in
                 {%- else %}
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} } { path_beg -i {{service.url}} }{% endif %}{% endif %}
         {%- endfor -%}
-    {%- endfor %}
+    {%- endfor -%}
     {#- Process Host matching -#}
-    {%- for group, list in services | groupby('name') -%}
+    {% for group, list in services | groupby('name') -%}
         {%- for service in list[:1] -%}
             {%- if service.http and service.dns and service.vhost and not service.url%}
                 {%- if service.dns is list %}
@@ -81,7 +81,7 @@ frontend http-in
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} }{% endif %}{% endif %}
         {%- endfor -%}
     {%- endfor -%}
-    {% if ",".join(services | get_uniq_for_key('https')) -%}
+    {% if ",".join(services | get_uniq_for_key('https')) %}
     default_backend https-redirect
     {%- endif %}
 {% elif ",".join(services | get_uniq_for_key('https')) %}
