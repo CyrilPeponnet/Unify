@@ -80,8 +80,8 @@ frontend http-in
                 {%- else %}
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} }{% endif %}{% endif %}
         {%- endfor -%}
-    {%- endfor %}
-    {%- if ",".join(services | get_uniq_for_key('https')) -%}
+    {%- endfor -%}
+    {% if ",".join(services | get_uniq_for_key('https')) -%}
     default_backend https-redirect
     {%- endif %}
 {% elif ",".join(services | get_uniq_for_key('https')) %}
