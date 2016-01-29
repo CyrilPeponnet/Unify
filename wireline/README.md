@@ -35,9 +35,9 @@ This will set up a receive script in `/home/git/` this script will be triggered 
 This script will get triggered on push and will perform some actions:
 * Untar the repo
 * Look for a file `wireline.ini` in `~/` containing the default values if needed.
-* Look for a file in the untarred repo root dir called `ci.ini` and source it if exists (overriding the default values from above)
+* Look for a file in the untarred repo root dir called `wireline.ini` and source it if exists (overriding the default values from above)
 
-A `push1docker.ini` file can be like:
+A `wireline.ini` file can be like:
 
 ```
 YAML_DEPLOY="docker-compose.yaml"
@@ -58,8 +58,8 @@ Here are all the values you can set:
 * DEPLOY="Y" or "N" tell if images need to be deployed or stopped / removed
 * DOCKER_HOST_BUILD="docker_host:port" specify the docker host to use for build
 * DOCKER_HOST_DEPLOY="docker_host:port" specify the docker host to use for deployement
-* SCALE="name_container_1=2 name_container_2=3", if set, will issue a docker-compose scale `string` after deploy (ci.ini only)
-* MONITORING=="Y" or "N" will be used later (ci.ini only)
+* SCALE="name_container_1=2 name_container_2=3", if set, will issue a docker-compose scale `string` after deploy (wireline.ini only)
+* MONITORING=="Y" or "N" will be used later (wireline.ini only)
 
 ## Use it as a container
 
@@ -151,9 +151,9 @@ Then be sure to have and have a `server` folder with a `Dockerfile` inside like:
 FROM nginx
 ```
 
-We are done for the docker part, now you need to create a `ci.ini` file if needed. In our case we need it to set the proper values.
+We are done for the docker part, now you need to create a `wireline.ini` file if needed. In our case we need it to set the proper values.
 
-`ci.ini`
+`wireline.ini`
 ```
 YAML_DEPLOY=production.yaml
 YAML_BUILD=build.yaml
@@ -163,7 +163,7 @@ REGISTRY=localhost:5000
 The complete project structure is now:
 ```
 ├── build.yaml
-├── ci.ini
+├── wireline.ini
 ├── production.yaml
 └── server
     └── Dockerfile
@@ -227,11 +227,11 @@ df8e8786298a        localhost:5000/test/server   "nginx -g 'daemon off"   About 
 e8d6366afe68        nginx                                            "nginx -g 'daemon off"   About a minute ago   Up About a minute   443/tcp, 0.0.0.0:32771->80/tcp   test_ui_1
 ```
 
-If you need to scale, or unpublish your app, just change the `ci.ini` file, commit and push!
+If you need to scale, or unpublish your app, just change the `wireline.ini` file, commit and push!
 
 Scaling:
 ```
-➜  test git:(master) echo SCALE="server=2" >> ci.ini
+➜  test git:(master) echo SCALE="server=2" >> wireline.ini
 ➜  test git:(master) ✗ git commit -a -m "Scale server to 2"
 [master 140f6fd] Scale server to 2
  1 file changed, 1 insertion(+)
@@ -276,7 +276,7 @@ remote: To git@192.168.99.102:10222/test
 
 Stopping:
 ```
-➜  test git:(master) echo DEPLOY=N >> ci.ini
+➜  test git:(master) echo DEPLOY=N >> wireline.ini
 ➜  test git:(master) ✗ git commit -a -m "Unpublish"
 [master 3c36bd5] Unpublish
  1 file changed, 1 insertion(+)

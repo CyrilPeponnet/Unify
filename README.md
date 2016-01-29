@@ -63,7 +63,7 @@ The following tags can be used with `vhost` (but are not mandatory, depending on
 |       key      |     attribute example  |          comment          |
 |----------------|------------------------|---------------------------|
 | `tcp` or `http` or `https`          | `80`           | Specify the proto and the port. http 80 and https 443 are guessed automaticaly. If no port is provided it will be guessed from the container. |
-| `url`          | `/api`            | The url your service will match. |
+| `url_prefix`          | `/api`            | The url your service will match. |
 | `check`        | `OPTIONS /api/events` | If you need to set a specific check (see haproxy documentation). If not speficied, the default value will be added. If set to `disabled` then the checks will be disabled for this entry. |
 | `balance`      | `leastconn`      | The balance type to use. See haproxy documentation (roundrobin by default). |
 | `ssl`          | `backend`              | SSL type you want to use between `backend`, `offloading`, `bridge` or `pass-through` (see details below).|
@@ -72,13 +72,13 @@ The following tags can be used with `vhost` (but are not mandatory, depending on
 
 **Note:**
 
-You can set the same `dns` and `vhost` value for several services. You can then use `url` to specify which backend to reach.
+You can set the same `dns` and `vhost` value for several services. You can then use `url_prefix` to specify which backend to reach.
 
 Let's consider two containers a server and a ui. The ui is reachable under `myapp.mydomain.tld` and the server under `myapp.mydomain.tld/api`
 
 So when creating your containers add:
 * For UI container: `dns=mydomain.tld,vhost=myapp`
-* For SERVER container: `dns=mydomain.tld,vhost=myapp,url=/api`
+* For SERVER container: `dns=mydomain.tld,vhost=myapp,url_prefix=/api`
 
 This will create the proper configuratio for:
 * request for `myapp.mydomain.tld` goes to UI container

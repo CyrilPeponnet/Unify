@@ -21,7 +21,7 @@ Here is how the final folder tree looks like:
 │   └── requirements.txt
 ├── README.md
 ├── build.yaml
-├── ci.ini
+├── wireline.ini
 └── deploy.yaml
 ```
 
@@ -159,7 +159,7 @@ It specifies the folder where the counter `Dockerfile` is.
 
 ## The wireline configuration
 
-In the `ci.ini` you can specify/override parameters used by wireline when building/deploying/scaling your application.
+In the `wireline.ini` you can specify/override parameters used by wireline when building/deploying/scaling your application.
 
 For now it will remains empty as we set the default value in the wireline container.
 
@@ -295,11 +295,11 @@ haproxy.domain.tld.
 
 ### Push to scale
 
-Add `SCALE="counter=2"` in your `ci.ini`, commit and push!
+Add `SCALE="counter=2"` in your `wireline.ini`, commit and push!
 
 
 ```
-➜  test git:(master) echo SCALE="counter=2" > ci.ini
+➜  test git:(master) echo SCALE="counter=2" > wireline.ini
 ➜  test git:(master) ✗ git commit -a -m "Scaling counter worker to 2"
 [master 5887dc2] Scaling counter worker to 2
  1 file changed, 1 insertion(+)
@@ -504,10 +504,10 @@ Your application is up to date.
 
 ## Push to stop / undeploy your application
 
-If you want to stop / undeploy your application. Just add the following to the `ci.ini` file.
+If you want to stop / undeploy your application. Just add the following to the `wireline.ini` file.
 
 ```
-➜  test git:(master) echo DEPLOY=N > ci.ini
+➜  test git:(master) echo DEPLOY=N > wireline.ini
 ```
 
 Then commit

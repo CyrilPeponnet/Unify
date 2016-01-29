@@ -21,7 +21,7 @@ cd $WORKSPACE
 test -f ~/wireline.ini && source ~/wireline.ini
 
 # Read custom values
-test -f $WORKSPACE/ci.ini && source $WORKSPACE/ci.ini || echo "No ci.ini found, using default values"
+test -f $WORKSPACE/wireline.ini && source $WORKSPACE/wireline.ini || echo "No wireline.ini found, using default values"
 
 # Set defaults just in case
 BUILD=${BUILD:="Y"}
@@ -31,8 +31,8 @@ DEPLOY=${DEPLOY:="Y"}
 DOCKER_HOST_BUILD=${DOCKER_HOST_BUILD:="unix:///var/run/docker.sock"}
 DOCKER_HOST_DEPLOY=${DOCKER_HOST_DEPLOY:="unix:///var/run/docker.sock"}
 SCALE=${SCALE:=""}
-YAML_DEPLOY=${YAML_DEPLOY:="docker-compose.yaml"}
-YAML_BUILD=${YAML_BUILD:="docker-compose-build.yaml"}
+YAML_DEPLOY=${YAML_DEPLOY:="wireline-deploy.yaml"}
+YAML_BUILD=${YAML_BUILD:="wireline-build.yaml"}
 
 if [ "$BUILD" = "Y" ] && [ -f "$YAML_BUILD" ]; then
 
