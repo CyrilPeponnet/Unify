@@ -143,7 +143,7 @@ backend bk_service-1
                         "dns=domain.tld",
                         "vhost=test",
                         "http=80",
-                        "url=/api"
+                        "url_prefix=/api"
                         ]
             }
         ]
@@ -193,7 +193,7 @@ backend bk_service-2
                         "dns=domain.tld",
                         "vhost=test",
                         "https=443",
-                        "url=/api"
+                        "url_prefix=/api"
                         ]
             }
         ]
@@ -262,7 +262,7 @@ frontend https-in-no-sni
                         "dns=domain.tld",
                         "vhost=test",
                         "https=443",
-                        "url=/api"
+                        "url_prefix=/api"
                         ]
             }
         ]
@@ -329,7 +329,7 @@ frontend https-in-no-sni
                 "tags": [
                         "dns=domain.tld",
                         "vhost=test",
-                        "url=/api"
+                        "url_prefix=/api"
                         ]
             }
         ]

@@ -50,7 +50,7 @@ class TestComplexService(TestCase):
                         "dns=domain.tld",
                         "https=443",
                         "vhost=myapp",
-                        "url=/api"
+                        "url_prefix=/api"
                         ]
             },
             {

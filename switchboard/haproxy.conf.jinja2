@@ -62,18 +62,18 @@ frontend http-in
     {#- Process url matching first -#}
     {%- for group, list in services | groupby('name') -%}
         {%- for service in list[:1] -%}
-            {%- if service.http and service.dns and service.vhost and service.url%}
+            {%- if service.http and service.dns and service.vhost and service.url_prefix%}
                 {%- if service.dns is list %}
                     {%- for domain in service.dns %}
-    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} } { path_beg -i {{service.url}} }{% endfor %}
+    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} } { path_beg -i {{service.url_prefix}} }{% endfor %}
                 {%- else %}
-    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} } { path_beg -i {{service.url}} }{% endif %}{% endif %}
+    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} } { path_beg -i {{service.url_prefix}} }{% endif %}{% endif %}
         {%- endfor -%}
     {%- endfor -%}
     {#- Process Host matching -#}
     {% for group, list in services | groupby('name') -%}
         {%- for service in list[:1] -%}
-            {%- if service.http and service.dns and service.vhost and not service.url%}
+            {%- if service.http and service.dns and service.vhost and not service.url_prefix%}
                 {%- if service.dns is list %}
                     {%- for domain in service.dns %}
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} }{% endfor %}
@@ -148,18 +148,18 @@ frontend https-in-no-sni
     {#- Process url matching first -#}
     {%- for group, list in services | groupby('name') -%}
         {%- for service in list[:1] -%}
-            {%- if service.https and service.dns and service.vhost and service.url%}
+            {%- if service.https and service.dns and service.vhost and service.url_prefix%}
                 {%- if service.dns is list %}
                     {%- for domain in service.dns %}
-    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} } { path_beg -i {{service.url}} }{% endfor %}
+    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} } { path_beg -i {{service.url_prefix}} }{% endfor %}
                 {%- else %}
-    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} } { path_beg -i {{service.url}} }{% endif %}{% endif %}
+    use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{service.dns}} } { path_beg -i {{service.url_prefix}} }{% endif %}{% endif %}
         {%- endfor -%}
     {%- endfor %}
     {#- Process Host matching -#}
     {%- for group, list in services | groupby('name') -%}
         {%- for service in list[:1] -%}
-            {%- if service.ssl in ['offloading', 'bridge'] and service.dns and service.vhost and not service.url%}
+            {%- if service.ssl in ['offloading', 'bridge'] and service.dns and service.vhost and not service.url_prefix%}
                 {%- if service.dns is list %}
                     {%- for domain in service.dns %}
     use_backend bk_{{service.name}} if { hdr(host) -i {{service.vhost}}.{{domain}} }{% endfor %}

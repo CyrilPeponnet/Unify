@@ -256,7 +256,7 @@ frontend https-in-no-sni
                     "dns=domain.tld",
                     "vhost=test",
                     "http=80",
-                    "url=/api",
+                    "url_prefix=/api",
                     r"check=OPTIONS \r\n/api/events"
                     ]
         }
@@ -288,7 +288,7 @@ backend bk_service-1
                     "dns=domain.tld",
                     "vhost=test",
                     "http=80",
-                    "url=/api",
+                    "url_prefix=/api",
                     r"check=disabled"
                     ]
         }
