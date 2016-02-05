@@ -10,14 +10,15 @@ This script will listen for service change in consul and generate proper haproxy
 
 ## Example of use
 
-`python switchboard.py --cmd "systemctl reload haproxy" -o /etc/haproxy/haproxy.conf haproxy.conf.jinja2 haproxy.conf.jinja2`
+`python switchboard.py --consul <CONSUL_HOST> -cmd "systemctl reload haproxy" -o /etc/haproxy/haproxy.conf haproxy.conf.jinja2 haproxy.conf.jinja2`
 
 # Options
 
 ```
-usage: switchboard.py [-h] [--cmd COMMAND] --consul CONSUL [-o OUTPUT]
-                      [--has INCLUDE] [--match MATCH] [--has-not EXCLUDE]
-                      [--no-match NOMATCH] [--binding-ip BINDIP]
+usage: switchboard.py [-h] [--cmd COMMAND] --consul CONSUL [-k KEY]
+                      [-o OUTPUT] [--has INCLUDE] [--match MATCH]
+                      [--has-not EXCLUDE] [--no-match NOMATCH]
+                      [--binding-ip BINDIP]
                       template
 
 positional arguments:
@@ -28,6 +29,8 @@ optional arguments:
   --cmd COMMAND         The command to invoke after rendering the template.
                         Will be executed in a shell.
   --consul CONSUL       Consul fqnd or ip to connect to.
+  -k KEY, --listen-key KEY
+                        The path to consul datastore key to listen to.
   -o OUTPUT, --output OUTPUT
                         The target file. Renders to stdout if not specified.
   --has INCLUDE         Only render services that have the (all of the)
@@ -60,9 +63,12 @@ You can pass you own command at the end also:
 
 Usage example:
 
-`docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
+`docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard -k whisper/updated --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
 
 The `--net "host"` is required in order to this container to be able to reach other containers on the same host.
+
+The `-k` will listen for a specific path in consul datastore. This could be used in conjonction with `whisper` when new ssl certs are issued for https hosts.
+
 
 **TIPS:** Fast certificate creation:
 With `certm` container, you can create easily:

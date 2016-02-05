@@ -8,6 +8,9 @@ import re
 import subprocess
 import sys
 
+from threading import Thread
+from time import sleep
+
 _args = None
 
 @contextlib.contextmanager
@@ -167,6 +170,24 @@ def get_services(_consul):
                              'tags': instance['ServiceTags']})
     return services
 
+def services_listen(consul):
+    index = None
+    while True:
+        old_index = index
+        index, data = consul.catalog.services(index=index)
+        if old_index != index:
+            filtered = filter_services(get_services(consul))
+            render(filtered, _args)
+
+def kv_listen(consul, key):
+    index = None
+    while True:
+        old_index = index
+        index, data = consul.kv.get(key, index=index)
+        if old_index != index:
+            filtered = filter_services(get_services(consul))
+            render(filtered, _args)
+
 def main():
     global _args
     parser = argparse.ArgumentParser()
@@ -174,9 +195,11 @@ def main():
                         help="The Jinja2 template to render")
     parser.add_argument("--cmd", dest="command",
                         help="The command to invoke after rendering the template. Will be executed in a shell.")
-    parser.add_argument("--consul", dest="consul",
+    parser.add_argument("-c", "--consul", dest="consul",
                         required=True,
                         help="Consul fqnd or ip to connect to.")
+    parser.add_argument("-k", "--listen-key", dest="key",
+                        help="The path to consul datastore key to listen to.")
     parser.add_argument("-o", "--output", dest="output", help="The target file. Renders to stdout if not specified.")
     parser.add_argument("--has", dest="include", action="append",
                         help="Only render services that have the (all of the) specified tag(s). This parameter "
@@ -195,17 +218,24 @@ def main():
     _args = parser.parse_args()
 
     _consul = consul.Consul(_args.consul)
-    index = None
-    while True:
-        old_index = index
-        index, data = _consul.catalog.services(index=index)
-        if old_index != index:
-            filtered = filter_services(get_services(_consul))
-            render(filtered, _args)
 
-if __name__ == "__main__":
+    ts = Thread(target = services_listen, kwargs={'consul': _consul})
+    ts.setDaemon(True)
+    ts.start()
+
+    if _args.key:
+        tk = Thread(target=kv_listen,  kwargs={'consul': _consul, 'key': _args.key})
+        tk.setDaemon(True)
+        tk.start()
+
+    # Main Run loop
     try:
-        main()
+        while True:
+            sleep(0.1)
     except KeyboardInterrupt:
         print("\nBye.")
+
+
+if __name__ == "__main__":
+    main()
 
