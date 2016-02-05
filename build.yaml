@@ -4,3 +4,5 @@
   build: switchboard
 'wireline':
   build: wireline
+'whisper':
+  build: whisper
