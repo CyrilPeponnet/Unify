@@ -34,11 +34,11 @@ class Letswhisper(object):
 
     def update_certificates(self, domain, vhosts):
         output = {'pk':None, 'certs':None}
-        profile = self._route53_profile_for(domain)
-        if not profile:
+        if not domain in botocore.session.get_session().available_profiles:
+            self.log.warn("No AWS profiles found!", domain=domain)
             return output
         acme_client = self.connect()
-        aws_client = boto3.Session(profile_name=profile)
+        aws_client = boto3.Session(profile_name=domain)
         route53_client = aws_client.client('route53')
         self.log.info("Requesting a certificate", domain=domain, vhosts=vhosts)
         private_key = self._generate_rsa_private_key()
@@ -158,16 +158,6 @@ class Letswhisper(object):
             }
         )
         return response["ChangeInfo"]["Id"]
-
-
-    def _route53_profile_for(self, domain):
-        """Return the best profile to use for a given domain"""
-        for profile in botocore.session.get_session().available_profiles:
-            profile_name = profile.replace("profile ", "")
-            if profile_name in domain:
-                return profile
-        self.log.warn("No AWS profiles found!", domain=domain)
-        return None
 
     def register(self):
         self.log.info("Registering to acme servers")

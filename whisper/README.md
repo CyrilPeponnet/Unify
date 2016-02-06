@@ -38,7 +38,7 @@ In order to register to ACME servers, you will need to export a valid email addr
 You will also need (like 411), the aws credential for the dns requested zones in `.aws/credentials` wiht profile like:
 
 ```
-[profile my.domain.tld]
+[my.domain.tld]
 aws_access_key_id = XXX
 aws_secret_access_key = XXX
 ```
