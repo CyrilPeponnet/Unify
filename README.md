@@ -7,7 +7,7 @@
 This repo include a set of tools to simplify the workflow to create a new docker application.
 
 From a git repo containing your application sources, a simple `git push` will deploy your containerized application to a docker infrastructure.
-Using Service discovery and tags, it will also create for you `dns records` and `haproxy acl`.
+Using Service discovery and tags, it will also create for you `dns records`, `haproxy acl` and even request a trusted `letsencrypt` certificate used in haproxy!
 
 This setup is meant to be used with the following container orchestration tools
 
@@ -23,6 +23,7 @@ Check `Infra.md` for more information on how to deploy those tools.
 * 411: Will take care of DNS records when new containers are added (see `411/Readme.md`)
 * Switchboard: Will take care of haproxy configuration when you are deploying a container (see `switchboard/Readme.md`)
 * wireline: Will be used as a remote target in your git repo to build/deploy/scale your application (see `wireline/Readme.md`)
+* whisper: Will request [letsencrypt](https://letsencrypt.org) certificates for your ssl services autmatiquely (see `whisper/Readme.md`)
 
 <p align="center">
     <img src="https://dl.dropboxusercontent.com/u/2663552/Github/Unify/Unify%20workflow.png" width="800px">
