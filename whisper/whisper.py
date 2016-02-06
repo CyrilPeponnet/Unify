@@ -331,7 +331,6 @@ class WhisperManager(object):
                 if f.endswith(".pem"):
                     try:
                         certificate = x509.load_pem_x509_certificate(file.read(open("%s/%s" % (root, f))), default_backend())
-                        self._rate_limit_helper(certificate.not_valid_before)
                         fqdns = set()
                         for cn in certificate.subject.get_attributes_for_oid(x509.OID_COMMON_NAME):
                             fqdns.add(cn.value)
@@ -357,6 +356,7 @@ class WhisperManager(object):
                             vhost = fqdn.replace(".%s" % domain,'')
                             # Save info
                             if vhost in self.domains.get(domain, {}):
+                                self._rate_limit_helper(certificate.not_valid_before)
                                 if (datetime.date.today() - certificate.not_valid_after.date()).days > self.expiration_threshold:
                                     self.log.info("Current certificate %s need to be renewed" % f, domain=domain, host=vhost)
                                 else:
@@ -370,18 +370,17 @@ class WhisperManager(object):
 
     def _rate_limit_helper(self, issued=None):
         """This function will maintain an internal state of the current rate limit"""
-        if issued:
+        if issued and issued not in self._certs_issued_for_period['latest']:
             if (datetime.date.today() - issued.date()).days < self.per_days:
                 self._certs_issued_for_period['nb'] +=1
                 self._certs_issued_for_period['latest'].append(issued)
                 self._certs_issued_for_period['latest'].sort()
         else:
             if self._certs_issued_for_period['nb'] >= self.max_certs:
-                self.log.warn("You reached the limit of certs!", max_certs=self.max_certs, per_days=self.per_days, next_slot=self._certs_issued_for_period['latest'][0].isoformat())
-                return False
+                self.log.warn("You may reached the limit of certs!", max_certs=self.max_certs, per_days=self.per_days, next_slot=self._certs_issued_for_period['latest'][0].isoformat())
             else:
                 self.log.info("You have issued %s/%s certs during the past %s days" % (self._certs_issued_for_period['nb'], self.max_certs, self.per_days))
-                return True
+        return True
 
     def _refresh_services(self):
         """ Get services from consul """
