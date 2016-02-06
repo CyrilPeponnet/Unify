@@ -56,10 +56,10 @@ By default it will try to fetch and create records for domains fetched from sour
 
 If you want to manage your domain/subdomain with AWS, you need to create:
 
-`~/.boto` contanining:
+`~/.aws/credentials` contanining:
 
 ```
-[profile my.domain.tld]
+[my.domain.tld]
 aws_access_key_id = XXX
 aws_secret_access_key = XXX
 ```
@@ -78,11 +78,11 @@ The ending container will include:
 
 The only things you will need to provide are:
 * volume with your own dnsmasq configuration (make sure to include all `.conf` file in your `dnsmasq.conf` main config)
-* volume with you profiles aws credentials (`boto.cfg` file mapped to `/etc/boto.cfg`)
+* volume with you profiles aws credentials (`.aws/credentials` file mapped to `/root/.aws/crendetials`)
 
 Example of usage:
 
-`docker run -d -p 53:53/tcp -p 53:53/udp --cap-add=NET_ADMIN -v /path/dnsmasq/dnsmasq.d:/etc/dnsmasq.d -v /path/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf -v /path/boto.cfg:/etc/boto.cfg -e CONSUL=<consul_address> -e LISTEN='-L services -L /path/to/kv' -e EXTERNAL='/path/to/external/hostfile' 411`
+`docker run -d -p 53:53/tcp -p 53:53/udp --cap-add=NET_ADMIN -v /path/dnsmasq/dnsmasq.d:/etc/dnsmasq.d -v /path/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf -v /path/.aws/credentials:/root/.aws/credentials -e CONSUL=<consul_address> -e LISTEN='-L services -L /path/to/kv' -e EXTERNAL='/path/to/external/hostfile' 411`
 
 Using `-L services -L /path/to/kv` will allow `411` to get triggered when there is a service change in consul or if the `/path/to/kv` key is updated in the consul datastore.
 
@@ -119,14 +119,46 @@ addn-hosts=/etc/dnsmasq.d/custom.hosts
 10.0.0.1 test.your.domain.tld test
 ```
 
-Example of boto.cfg
+Example of `.aws/credentials`, see [boto3 configuration](http://boto3.readthedocs.org/en/latest/guide/configuration.html#configuration-files)
 
 ```
-[profile sub1.your.domain.tld]
+[sub1.your.domain.tld]
 aws_access_key_id = xxxxxxx
 aws_secret_access_key = xxxxxxxx
 
-[profile sub2.your.domain.tld]
+[sub2.your.domain.tld]
 aws_access_key_id = xxxxxxx
 aws_secret_access_key = xxxxxxxx
+```
+
+## AWS profile permissions required
+
+The minimum set of permissions you will need to set are:
+
+* route53:ChangeResourceRecordSets
+* route53:GetChange
+* route53:GetChangeDetails
+* route53:ListHostedZones
+
+Example of IAM json policy:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ChangeResourceRecordSets",
+                "route53:GetChange",
+                "route53:GetChangeDetails",
+                "route53:ListHostedZones"
+            ],
+            "Resource": [
+                "arn:aws:route53:::hostedzone/12343242343"
+            ]
+        }
+    ]
+}
 ```
