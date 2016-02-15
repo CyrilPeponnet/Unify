@@ -2,3 +2,5 @@
 *.pyc
 
 switchboard/result.py
+
+whisper/.acme

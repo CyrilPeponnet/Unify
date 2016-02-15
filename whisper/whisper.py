@@ -1,8 +1,8 @@
-import argparse
 import boto3
 import botocore
 import consul
 import datetime
+import docopt
 import inspect
 import OpenSSL.crypto
 import os
@@ -236,7 +236,7 @@ class WhisperManager(object):
     """This class will handle all certs requests / renew using letsencrypt and route53 from consul services"""
     def __init__(self, options):
         super(WhisperManager, self).__init__()
-        self._consul = consul.Consul(options.consul)
+        self._consul = consul.Consul(options['--consul'])
         self._threaded_jobs = {}
         self.expiration_threshold = -7
         self._periodic_refresh_interval = 60 * 60 * 24
@@ -244,12 +244,12 @@ class WhisperManager(object):
         self.per_days = 7
         self._certs_issued_for_period= {'nb':0, 'latest':[]}
         self.log = Logger()
-        self.log.level = "debug" if options.debug else "info"
+        self.log.level = "debug" if options['--debug'] else "info"
         self.domains = {}
-        self.output_certs = options.output_certs
-        self.letswhisper = Letswhisper(self.output_certs, self.log, options.acme_staging)
+        self.output_certs = options['<path_to_cert_folder>']
+        self.letswhisper = Letswhisper(self.output_certs, self.log, options['--staging'])
         self.lock = Lock()
-        self.kv_notification_path = options.notify
+        self.kv_notification_path = options['--notify']
 
         self._spawn_listeners()
 
@@ -432,23 +432,18 @@ class WhisperManager(object):
         parse_services(services)
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--consul",
-                        required=True,
-                        help="Address of one of your consul node")
-    parser.add_argument("-n", "--notify",
-                        help="The key path to update in consul data store (can be used to trigger haproxy reload).")
-    parser.add_argument("-o", "--output-certs",
-                        required=True,
-                        help="The path where the certs are and will be written.")
-    parser.add_argument("-d", "--debug",
-                        action="store_true",
-                        help="Debug log level.")
-    parser.add_argument("-s", "--acme-staging",
-                        action="store_true",
-                        help="Use staging ACME environment.")
+    """Whisper, a tool to retrieve letsencryp certificates for your docker applications.
 
-    options = parser.parse_args()
+    Usage: whisper.py [options] <path_to_cert_folder>
+
+    Options:
+      -h, --help            Show this screen.
+      -c, --consul host     Consul host or ip [default: consul].
+      -n, --notify path     KV Path in consul datastore to update [default: whisper/updated].
+      -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
+      -d, --debug           Set log level to debug.
+    """
+    options = docopt.docopt(main.__doc__)
 
     WhisperManager(options)
 
