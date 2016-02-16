@@ -18,19 +18,14 @@ It will also run every 24h to check if some certs in the ouput dir need to be re
 ## Usage
 
 ```
-usage: whisper.py [-h] -c CONSUL [-n NOTIFY] -o OUTPUT_CERTS [-d] [-s]
+    Usage: whisper.py [options] <path_to_cert_folder>
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -c CONSUL, --consul CONSUL
-                        Address of one of your consul node
-  -n NOTIFY, --notify NOTIFY
-                        The key path to update in consul data store (can be
-                        used to trigger haproxy reload).
-  -o OUTPUT_CERTS, --output-certs OUTPUT_CERTS
-                        The path where the certs are and will be written.
-  -d, --debug           Debug log level.
-  -s, --acme-staging    Use staging ACME environment.
+    Options:
+      -h, --help            Show this screen.
+      -c, --consul host     Consul host or ip [default: consul].
+      -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
+      -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
+      -d, --debug           Set log level to debug.
 ```
 
 In order to register to ACME servers, you will need to export a valid email address the first time as an environment variable. This will then create a `.acme` file in the output folder containing the private key to get connected to ACME servers when requesting certificates.
@@ -42,7 +37,6 @@ You will also need (like 411), the aws credential for the dns requested zones in
 aws_access_key_id = XXX
 aws_secret_access_key = XXX
 ```
-
 
 ### As a container
 
@@ -57,3 +51,34 @@ Also make sure that the `cert` folder passed as a volume is accesible from `swit
 ## Drawback
 
 Letsencrypt as a rate limite of 5 certs per 7 days. So there a helper in this script that will count how many certs you have issues the last past week and tell you when the next slot will be available.
+
+## AWS profile permissions required
+
+The minimum set of permissions you will need to set are:
+
+* route53:ChangeResourceRecordSets
+* route53:GetChange
+* route53:GetChangeDetails
+* route53:ListHostedZones
+
+Example of IAM json policy:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ChangeResourceRecordSets",
+                "route53:GetChange",
+                "route53:GetChangeDetails",
+                "route53:ListHostedZones"
+            ],
+            "Resource": [
+                "arn:aws:route53:::hostedzone/12343242343"
+            ]
+        }
+    ]
+}

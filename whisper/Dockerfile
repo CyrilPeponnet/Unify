@@ -26,4 +26,4 @@ ENV CONSUL consul
 ENV KV_PATH whisper/updated
 ENV ACME_REGISTER_EMAIL needtochange@docker.run
 
-CMD ["sh", "-c", "/usr/bin/python whisper.py -c ${CONSUL} -o /app/certs -n ${KV_PATH} ${DEBUG} ${STAGING}"]
+CMD ["sh", "-c", "/usr/bin/python whisper.py -c ${CONSUL} -n ${KV_PATH} ${DEBUG} ${STAGING} /app/certs"]
