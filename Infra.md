@@ -225,7 +225,8 @@ docker::run_instance::instance:
     image: 'localhost:5000/unify/411'
     env:
       - '"CONSUL=%{::ipaddress_ens2f1}"'
-      - '"LISTEN=-L services"'
+      - '"KV=-k netadmin/updated"'
+      - '"EXTERNAL=-e /etc/netadmin-dump"'
     ports:
       - "%{::ipaddress_ens2f1}:53:53/tcp"
       - "%{::ipaddress_ens2f1}:53:53/udp"
@@ -274,6 +275,7 @@ haproxy:
   environment:
     - "CONSUL=consul.service.domain.tld"
     - "affinity:container!=~unify_haproxy*"
+    - '"KV=-k whisper/updated"'
   labels:
     type: haproxy
     SERVICE_TAGS: 'dns=sub.domain.tld'

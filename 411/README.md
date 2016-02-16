@@ -104,7 +104,7 @@ The only things you will need to provide are:
 
 Example of usage:
 
-`docker run -d -p 53:53/tcp -p 53:53/udp --cap-add=NET_ADMIN -v /path/dnsmasq/dnsmasq.d:/etc/dnsmasq.d -v /path/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf -v /path/.aws/credentials:/root/.aws/credentials -e CONSUL=<consul_address> -e KV='-k /path/to/kv -k pat/to/otherkv' -e EXTERNAL='/path/to/external/hostfile' 411`
+`docker run -d -p 53:53/tcp -p 53:53/udp --cap-add=NET_ADMIN -v /path/dnsmasq/dnsmasq.d:/etc/dnsmasq.d -v /path/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf -v /path/.aws/credentials:/root/.aws/credentials -e CONSUL=<consul_address> -e KV='-k /path/to/kv -k pat/to/otherkv' -e EXTERNAL='-e /path/to/external/hostfile' 411`
 
 Using `KV='-k /path/to/kv -k pat/to/otherkv'` will allow `411` to get triggered when there is a  change in the consul datastore keys. (For example when an external file has been updated by a third party program).
 

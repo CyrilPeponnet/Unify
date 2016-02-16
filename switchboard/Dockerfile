@@ -20,7 +20,8 @@ COPY example.pem /haproxy/certs/example.pem
 RUN /usr/bin/pip install -r /app/requirements.txt
 
 ENV CONSUL consul.service
+ENV KV ""
 
 EXPOSE 80 443 5080
 
-CMD ["sh", "-c", "/usr/bin/python switchboard.py --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'"]
+CMD ["sh", "-c", "/usr/bin/python switchboard.py --consul ${CONSUL} ${KV} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'"]

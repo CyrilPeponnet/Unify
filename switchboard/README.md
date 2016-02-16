@@ -45,9 +45,11 @@ You can use your own certificates by providing them through a volume:
 
 You can pass you own command at the end also:
 
-Usage example:
+### Usage example
 
-`docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard -k whisper/updated --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
+```
+docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard -k whisper/updated --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
+```
 
 The `--net "host"` is required in order to this container to be able to reach other containers on the same host.
 
