@@ -1,7 +1,6 @@
 #!/bin/env python
 from __future__ import print_function
 
-import argparse
 import boto3
 import botocore
 import consul
@@ -11,6 +10,7 @@ import os
 import re
 import sys
 
+from docopt import docopt
 from threading import Thread, Lock
 from time import sleep
 
@@ -120,8 +120,6 @@ class Unify411(object):
 
         if commit:
             route53_client.change_resource_record_sets(HostedZoneId=zone_id, ChangeBatch=change)
-        else:
-            print(change)
 
     def __find_parent_zone_for(self, zone):
         """ Helper to find if we have parent zone we can use"""
@@ -257,10 +255,93 @@ class Unify411(object):
                         actions[domain][name]['action'] = "UPSERT"
         return actions
 
+def create_records(unify411, options):
+    """This function will do what we need to do :)"""
+    with unify411.lock:
+        unify411.refresh()
+        if not options['output-prefix'] or options['dryrun']:
+            print("> AWS records")
+            unify411.update_route53(commit=False)
+            hosts, cname = unify411.generate_output_file()
+            print("> Hosts records")
+            print(hosts)
+            print("> CNAME records")
+            print(cname)
+        elif options['output-prefix']:
+            unify411.update_route53()
+            unify411.generate_output_file(options['output-prefix'])
+            if options['run-cmd']:
+                os.system(options['run-cmd'])
 
-def dump_aws_records():
-    """This function will iterate over boto profile and list the records associated to."""
+def services_listen(unify411, options):
+    """ Services listen runloop"""
+    unify411.log.info("Listening for services...")
+    index = None
+    while True:
+        old_index = index
+        index, data = unify411.consul.catalog.services(index=index)
+        if old_index != index:
+            create_records(unify411, options)
+
+def kv_listen(unify411, options, key):
+    """ KV listen runloop"""
+    unify411.log.info("Listening for key %s..." % key)
+    index = None
+    while True:
+        old_index = index
+        index, data = unify411.consul.kv.get(key, index=index)
+        if old_index and old_index != index:
+            create_records(unify411, options)
+
+
+class command(object):
+    """411, a tool to create dns entries in AWS, dnsmasq from your published containers and external files.
+
+    This will create the files that need to be commited in different repos.
+
+    Usage: 411.py [COMMAND]
+
+    Commands:
+    """
+    registry = {}
+    short_docs = []
+    def __init__(self, doc = None):
+        self.short_docs.append(doc)
+
+    def __call__(self, fn):
+        command.registry[fn.func_name.replace("_", "-")] = fn
+        return fn
+
+    @classmethod
+    def dispatch(self, args=sys.argv[1:]):
+        func_name = len(args) and args[0] or None
+        if func_name is None or not func_name in command.registry:
+            sys.stderr.write(self.__doc__)
+            for fn, short_doc in zip(command.registry, command.short_docs):
+                sys.stderr.write("\t" + fn + ((":\t" + short_doc) if short_doc else "") + "\n")
+            sys.exit(1)
+        else:
+            func = command.registry[func_name]
+            arguments = docopt(func.__doc__, args[1:])
+            for k in arguments:
+                arguments[k.replace("--", "")] = arguments.pop(k)
+            func(arguments)
+
+
+@command("List all DNS records in your AWS profiles.")
+def show(options):
+    """List all DNS records in your AWS profiles found under ~/.aws/credentials.
+
+    Usage: show [-d domain...]
+
+    Options;
+
+        -d, --domain domain           Specify the domain(s) to list records
+
+    """
     for profile in botocore.session.get_session().available_profiles:
+        if options['domain'] and profile not in options['domain']:
+            continue
         print("> Records for %s:" % profile)
         aws_client = boto3.Session(profile_name=profile)
         route53_client = aws_client.client('route53')
@@ -273,88 +354,37 @@ def dump_aws_records():
                     for record in record_set['ResourceRecordSets']:
                         print("  %-10s%-50s%-50s" % (record['Type'], record['Name'], ",".join([v['Value'] for v in record['ResourceRecords']])))
                     if record_set['IsTruncated']:
-                        record_set = route53_client.list_resource_record_sets(HostedZoneId=zone['Id'],StartRecordName=record_set['NextRecordName'])
+                        record_set = route53_client.list_resource_record_sets(HostedZoneId=zone['Id'], StartRecordName=record_set['NextRecordName'])
                     else:
                         break
 
-def create_records(unify411, options):
-    """This function will do what we need to do :)"""
-    with unify411.lock:
-        unify411.refresh()
-        if not options.output or options.dryrun:
-            print("> AWS records")
-            unify411.update_route53(commit=False)
-            hosts, cname = unify411.generate_output_file()
-            print("> Hosts records")
-            print(hosts)
-            print("> CNAME records")
-            print(cname)
-        elif options.output:
-            unify411.update_route53()
-            unify411.generate_output_file(options.output)
-            if options.post:
-                os.system(options.post)
+@command("Listen for services and create new records according to.")
+def listen(options):
+    """Listen for services in consul datastore and create/delete/modify DNS entries according to.
 
-def services_listen(unify411, options):
-    """ Services listen runloop"""
-    index = None
-    while True:
-        old_index = index
-        index, data = unify411.consul.catalog.services(index=index)
-        if old_index != index:
-            create_records(unify411, options)
+    Usage: listen [options] [-k path...] [-e file...]
 
-def kv_listen(unify411, options, key):
-    """ KV listen runloop"""
-    index = None
-    while True:
-        old_index = index
-        index, data = unify411.consul.kv.get(key, index=index)
-        if old_index and old_index != index:
-            create_records(unify411, options)
+    Options:
+        -c, --consul host               Consul host or ip [default: consul].
+        -e, --external-file path        Path to an external hosts file(s) to merge.
+        -d, --datacenter datacenter     Datacenter filter. If not provided will use the default datacenter from the agent.
+        -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
+        -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
+        -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the external file is updated for example).
+        --dryrun                        Don't do anything but print what it will do.
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--consul",
-                        help="Address of one of your consul node")
-    parser.add_argument("-e", "--external_hosts_files",
-                        action='append',
-                        help="External hosts file to merge")
-    parser.add_argument("-d", "--datacenter",
-                        help="Datacenter filter. If not provided will use the default datacenter from the agent")
-    parser.add_argument("-o", "--output",
-                        help="Output hosts file that will be generated (if not provided will print the output")
-    parser.add_argument("-p", "--post",
-                        help="Command line to run when the outfile is generated (and if it changes)")
-    parser.add_argument("-l", "--list",
-                        action="store_true",
-                        help="Just list the records you have in Route53. This will iterate over boto profiles.")
-    parser.add_argument("-L", "--listen",
-                        action='append',
-                        help="Listen to events in consul. Can be either service, or path/to/key or both")
-    parser.add_argument("--dryrun",
-                        action='store_true',
-                        help="Don't do anything but print what it will do.")
+    """
+    unify411 = Unify411(consul_address=options["consul"], external_hosts=options["external-file"], datacenter=options["datacenter"], output=options["output-prefix"])
 
-    options = parser.parse_args()
+    threads = []
+    threads.append(Thread(target=services_listen, kwargs={'unify411':unify411, 'options':options}))
 
-    if options.list:
-        dump_aws_records()
-        sys.exit(0)
+    for path in options['listen-key']:
+        threads.append(Thread(target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': path}))
 
-    if not options.consul:
-        print("Please provide proper arguments")
-        sys.exit(1)
-
-    unify411 = Unify411(consul_address=options.consul, external_hosts=options.external_hosts_files, datacenter=options.datacenter, output=options.output)
-    if options.listen:
-        for hook in options.listen:
-            if hook == "services":
-                t = Thread(target = services_listen, kwargs={'unify411':unify411, 'options':options})
-            else:
-                t = Thread(target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': hook})
-            t.setDaemon(True)
-            t.start()
+    for thread in threads:
+        thread.setDaemon(True)
+        thread.start()
 
     # Main Run loop
     try:
@@ -363,6 +393,8 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\nBye.")
 
-    else:
-        create_records(unify411, options)
+
+
+if __name__ == '__main__':
+    command.dispatch()
 
