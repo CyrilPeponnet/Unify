@@ -245,6 +245,7 @@ class WhisperManager(object):
         self._certs_issued_for_period= {'nb':0, 'latest':[]}
         self.log = Logger()
         self.log.level = "debug" if options['--debug'] else "info"
+        self.dryrun = options['--dryrun']
         self.domains = {}
         self.output_certs = options['<path_to_cert_folder>']
         self.letswhisper = Letswhisper(self.output_certs, self.log, options['--staging'])
@@ -260,6 +261,8 @@ class WhisperManager(object):
         for hosts in multi_hosts, single_hosts:
             if hosts:
                 self.log.debug("Check certificates for %s" % ",".join(hosts), domain=domain)
+                if self.dryrun:
+                    continue
                 certs = self.letswhisper.update_certificates(domain, hosts)
                 if certs.get('pk') and certs.get('certs'):
                     need_to_notify = True
@@ -272,7 +275,7 @@ class WhisperManager(object):
                         f.write(certs['pk'])
                         f.write(certs['certs'][0])
                         f.write(certs['certs'][1])
-        if need_to_notify:
+        if need_to_notify and not self.dryrun:
             self._send_notification()
 
     def _send_notification(self):
@@ -442,6 +445,7 @@ def main():
       -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
       -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
       -d, --debug           Set log level to debug.
+      --dryrun              Don't initite challenge, just saying what it will do.
     """
     options = docopt.docopt(main.__doc__)
 
