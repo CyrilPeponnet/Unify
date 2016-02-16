@@ -310,7 +310,7 @@ def kv_listen(unify411, options, key):
     while True:
         old_index = index
         index, data = unify411.consul.kv.get(key, index=index)
-        if old_index != index:
+        if old_index and old_index != index:
             create_records(unify411, options)
 
 if __name__ == '__main__':
