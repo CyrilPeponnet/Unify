@@ -439,7 +439,7 @@ def main():
     Options:
       -h, --help            Show this screen.
       -c, --consul host     Consul host or ip [default: consul].
-      -n, --notify path     KV Path in consul datastore to update [default: whisper/updated].
+      -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
       -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
       -d, --debug           Set log level to debug.
     """

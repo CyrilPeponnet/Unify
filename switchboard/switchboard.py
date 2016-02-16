@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 
-import argparse
 import consul
 import contextlib
+import docopt
 import jinja2
 import re
 import subprocess
@@ -31,33 +31,33 @@ def filter_services(svcs):
     filtered = []
 
     # filter includes
-    if _args.include:
+    if _args['--has']:
         for sv in svcs:
-            for inc in _args.include:
+            for inc in _args['--has']:
                 if inc in sv["tags"] and sv not in filtered:
                     filtered.append(sv)
 
-    if _args.match:
+    if _args['--match']:
         for sv in svcs:
-            for regex in _args.match:
+            for regex in _args['--match']:
                 for tag in sv["tags"]:
                     if re.match(regex, tag) and sv not in filtered:
                         filtered.append(sv)
 
-    if not filtered and not _args.include and not _args.match:
+    if not filtered and not _args['--has'] and not _args['--match']:
         filtered = svcs
 
-    if _args.exclude:
+    if _args['--has-not']:
         for sv in list(filtered):  # operate on a copy, otherwise .remove would change the list under our feet
-            for exc in _args.exclude:
+            for exc in _args['--has-not']:
                 if exc in sv["tags"]:
                     filtered.remove(sv)
 
-    if _args.nomatch:
+    if _args['--no-match']:
         for sv in list(filtered):
-            for regex in _args.nomatch:
+            for regex in _args['--no-match']:
                 for tag in sv["tags"]:
-                    if re.match(regex, tag):
+                    if re.match(regex, tag) and sv in list(filtered):
                         filtered.remove(sv)
 
     return filtered
@@ -138,7 +138,7 @@ def _generate_conf(_services, _template):
 
     context = {
         "services": _services,
-        "bindip": _args.bindip if _args else None,
+        "bindip": _args['--bind-ip'] if _args else None,
     }
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
@@ -151,11 +151,11 @@ def _generate_conf(_services, _template):
 
 def render(filtered, args):
     print("> Regenerating haproxy configuration...")
-    with file_or_stdout(_args.output) as outf:
-        outf.write(_generate_conf(filtered, args.template))
+    with file_or_stdout(args['--output']) as outf:
+        outf.write(_generate_conf(filtered, args['<jinja2_template>']))
 
-    if args.command:
-        subprocess.call(args.command, shell=True)
+    if args['--run-cmd']:
+        subprocess.call(args['--run-cmd'], shell=True)
 
 def get_services(_consul):
     services = []
@@ -184,47 +184,40 @@ def kv_listen(consul, key):
     while True:
         old_index = index
         index, data = consul.kv.get(key, index=index)
-        if old_index != index:
+        # if old_index is null don't continue as services_listen() will do the first pass
+        if old_index and old_index != index:
             filtered = filter_services(get_services(consul))
             render(filtered, _args)
 
 def main():
+    """Switchboard, generate HAProxy configuration for your docker applications.
+
+    Usage: switchboard.py [options] [--match match... --no-match match... --has tag... --has-not tag...] <jinja2_template>
+
+    Options:
+      -h, --help              Show this screen.
+      -c, --consul host       Consul host or ip [default: consul].
+      -r, --run-cmd cmd       Run the specified command afte rendering the template. Will be excecuted in a shell.
+      -k, --listen-key path   KV Path in consul datastore to listen to. Will reload haproxy if value of key is updated.
+      -o, --output file       The target file to render. If not specified it will print on stdout.
+      --match match           Only render services that have tags which match the passed regular expressions.
+      --no-match match        Only render services that have tags which dont match the passed regular expressions.
+      --has tag               Only render services that have (all/the) specified tag(s).
+      --has-not tag           Only render services that don't have any of (all/the) specified tag(s).
+      -b, --bind-ip ip        Set the listening ip address [default: 0.0.0.0].
+    """
     global _args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("template",
-                        help="The Jinja2 template to render")
-    parser.add_argument("--cmd", dest="command",
-                        help="The command to invoke after rendering the template. Will be executed in a shell.")
-    parser.add_argument("-c", "--consul", dest="consul",
-                        required=True,
-                        help="Consul fqnd or ip to connect to.")
-    parser.add_argument("-k", "--listen-key", dest="key",
-                        help="The path to consul datastore key to listen to.")
-    parser.add_argument("-o", "--output", dest="output", help="The target file. Renders to stdout if not specified.")
-    parser.add_argument("--has", dest="include", action="append",
-                        help="Only render services that have the (all of the) specified tag(s). This parameter "
-                             "can be specified multiple times.")
-    parser.add_argument("--match", dest="match", action="append",
-                        help="Only render services that have tags which match the passed regular expressions.")
-    parser.add_argument("--has-not", dest="exclude", action="append",
-                        help="Only render services that do NOT have (any of the) specified tag(s). This parameter "
-                             "can be specified multiple times.")
-    parser.add_argument("--no-match", dest="nomatch",  action="append",
-                        help="Only render services that do NOT have tags which match the passed regular "
-                             "expressions.")
-    parser.add_argument("--binding-ip", dest="bindip", default="0.0.0.0",
-                        help="Sets the listening ip address (Default: 0.0.0.0)")
 
-    _args = parser.parse_args()
+    _args = docopt.docopt(main.__doc__)
 
-    _consul = consul.Consul(_args.consul)
+    _consul = consul.Consul(_args['--consul'])
 
     ts = Thread(target = services_listen, kwargs={'consul': _consul})
     ts.setDaemon(True)
     ts.start()
 
-    if _args.key:
-        tk = Thread(target=kv_listen,  kwargs={'consul': _consul, 'key': _args.key})
+    if _args['--listen-key']:
+        tk = Thread(target=kv_listen,  kwargs={'consul': _consul, 'key': _args['--listen-key']})
         tk.setDaemon(True)
         tk.start()
 
