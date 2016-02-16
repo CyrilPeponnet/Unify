@@ -11,6 +11,7 @@ import re
 import sys
 
 from docopt import docopt
+from collections import OrderedDict
 from threading import Thread, Lock
 from time import sleep
 
@@ -303,7 +304,7 @@ class command(object):
 
     Commands:
     """
-    registry = {}
+    registry = OrderedDict()
     short_docs = []
     def __init__(self, doc = None):
         self.short_docs.append(doc)
@@ -323,6 +324,7 @@ class command(object):
         else:
             func = command.registry[func_name]
             arguments = docopt(func.__doc__, args[1:])
+            arguments[args[0]] = True
             for k in arguments:
                 arguments[k.replace("--", "")] = arguments.pop(k)
             func(arguments)
