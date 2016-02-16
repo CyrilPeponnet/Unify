@@ -10,40 +10,24 @@ This script will listen for service change in consul and generate proper haproxy
 
 ## Example of use
 
-`python switchboard.py --consul <CONSUL_HOST> -cmd "systemctl reload haproxy" -o /etc/haproxy/haproxy.conf haproxy.conf.jinja2 haproxy.conf.jinja2`
+`python switchboard.py --consul <CONSUL_HOST> -run-cmd "systemctl reload haproxy" -o /etc/haproxy/haproxy.conf haproxy.conf.jinja2`
 
 # Options
 
 ```
-usage: switchboard.py [-h] [--cmd COMMAND] --consul CONSUL [-k KEY]
-                      [-o OUTPUT] [--has INCLUDE] [--match MATCH]
-                      [--has-not EXCLUDE] [--no-match NOMATCH]
-                      [--binding-ip BINDIP]
-                      template
+    Usage: switchboard.py [options] [--match match... --no-match match... --has tag... --has-not tag...] <jinja2_template>
 
-positional arguments:
-  template              The Jinja2 template to render
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --cmd COMMAND         The command to invoke after rendering the template.
-                        Will be executed in a shell.
-  --consul CONSUL       Consul fqnd or ip to connect to.
-  -k KEY, --listen-key KEY
-                        The path to consul datastore key to listen to.
-  -o OUTPUT, --output OUTPUT
-                        The target file. Renders to stdout if not specified.
-  --has INCLUDE         Only render services that have the (all of the)
-                        specified tag(s). This parameter can be specified
-                        multiple times.
-  --match MATCH         Only render services that have tags which match the
-                        passed regular expressions.
-  --has-not EXCLUDE     Only render services that do NOT have (any of the)
-                        specified tag(s). This parameter can be specified
-                        multiple times.
-  --no-match NOMATCH    Only render services that do NOT have tags which match
-                        the passed regular expressions.
-  --binding-ip BINDIP   Sets the listening ip address (Default: 0.0.0.0)
+    Options:
+      -h, --help              Show this screen.
+      -c, --consul host       Consul host or ip [default: consul].
+      -r, --run-cmd cmd       Run the specified command afte rendering the template. Will be excecuted in a shell.
+      -k, --listen-key path   KV Path in consul datastore to listen to. Will reload haproxy if value of key is updated.
+      -o, --output file       The target file to render. If not specified it will print on stdout.
+      --match match           Only render services that have tags which match the passed regular expressions.
+      --no-match match        Only render services that have tags which dont match the passed regular expressions.
+      --has tag               Only render services that have (all/the) specified tag(s).
+      --has-not tag           Only render services that don't have any of (all/the) specified tag(s).
+      -b, --bind-ip ip        Set the listening ip address [default: 0.0.0.0].
 ```
 
 ## Container
@@ -63,7 +47,7 @@ You can pass you own command at the end also:
 
 Usage example:
 
-`docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard -k whisper/updated --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
+`docker run --rm -ti -p 80:80 -p 443:433 -e CONSUL="IP" --net "host" -v `pwd`/haproxy.conf.jinja2:/app/haproxy.conf.jinja2 -v `pwd`/certs:/haproxy/certs/ --name haproxy switchboard -k whisper/updated --has production --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'`
 
 The `--net "host"` is required in order to this container to be able to reach other containers on the same host.
 

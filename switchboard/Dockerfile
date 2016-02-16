@@ -23,4 +23,4 @@ ENV CONSUL consul.service
 
 EXPOSE 80 443 5080
 
-CMD ["sh", "-c", "/usr/bin/python switchboard.py --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'"]
+CMD ["sh", "-c", "/usr/bin/python switchboard.py --consul ${CONSUL} haproxy.conf.jinja2 -o /haproxy/haproxy.cfg --run-cmd '/usr/sbin/haproxy -D -p /var/run/haproxy.pid -f /haproxy/haproxy.cfg -sf $(cat /var/run/haproxy.pid) || true'"]
