@@ -47,10 +47,11 @@ class Logger(object):
 
 class Unify411(object):
     """Class to generate dns records"""
-    def __init__(self, consul_address, datacenter=None, external_hosts=[], zones=None, output=[]):
+    def __init__(self, consul_address, datacenter=None, external_hosts=[], zones=None, output=[], domains=[]):
         super(Unify411, self).__init__()
         self.consul = consul.Consul(host=consul_address)
         self.external_hosts = external_hosts if external_hosts else []
+        self.domains = domains
         self.output = output
         if datacenter and datacenter not in self.consul.catalog.datacenters():
             self.log.error("Error %s is not valid datacenter (valid dc: %s)" % (datacenter, ",".join(self.consul.catalog.datacenters())))
@@ -73,10 +74,13 @@ class Unify411(object):
         self.current_dns_records = {}
         self.__retrieve_aws_records()
 
-    def generate_output_file(self, file_path=None):
+    def generate_output_file(self, file_path=None, slave=False, domains=[]):
         out_a=""
         out_cname=""
-        for domain, entry in self.wanted_dns_records.iteritems():
+        records = self.wanted_dns_records if not slave else self.current_dns_records
+        for domain, entry in records.iteritems():
+            if domains and domain not in domains:
+                continue
             for host in sorted(entry):
                 if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', host[0]):
                     out_a += "%s %s %s\n" % (host[0], host[1], host[1].split(".")[0])
@@ -140,6 +144,8 @@ class Unify411(object):
         for domain in self.wanted_dns_records.keys():
             # if the current domain is a sub zone of an existing domain try the parent domain instead.
             parent_zone = self.__find_parent_zone_for(domain)
+            if self.domains and parent_zone not in self.domains:
+                continue
             if parent_zone in botocore.session.get_session().available_profiles:
                 aws_client = boto3.Session(profile_name=parent_zone)
                 route53_client = aws_client.client('route53')
@@ -260,19 +266,25 @@ def create_records(unify411, options):
     """This function will do what we need to do :)"""
     with unify411.lock:
         unify411.refresh()
-        if not options['output-prefix'] or options['dryrun']:
+        if not options['output-prefix'] or options.get('dryrun', False):
             print("> AWS records")
-            unify411.update_route53(commit=False)
-            hosts, cname = unify411.generate_output_file()
+            if not options.get('slave', False):
+                unify411.update_route53(commit=False)
+            hosts, cname = unify411.generate_output_file(slave=options.get('slave', False), domains=options['domain'])
             print("> Hosts records")
             print(hosts)
             print("> CNAME records")
             print(cname)
         elif options['output-prefix']:
-            unify411.update_route53()
-            unify411.generate_output_file(options['output-prefix'])
-            if options['run-cmd']:
-                os.system(options['run-cmd'])
+            if not options.get('slave', False):
+                unify411.update_route53()
+            unify411.generate_output_file(options['output-prefix'], options.get('slave', False), options['domain'])
+            if options.get('run-cmd'):
+                unify411.log.info("Running command", cmd=options.get('run-cmd'))
+                os.system(options.get('run-cmd'))
+            if options.get('notify'):
+                unify411.log.info("Sending Notificaiton Event", path=options.get('notify'))
+                unify411.consul.kv.put(options.get('notify'), "ping")
 
 def services_listen(unify411, options):
     """ Services listen runloop"""
@@ -291,7 +303,7 @@ def kv_listen(unify411, options, key):
     while True:
         old_index = index
         index, data = unify411.consul.kv.get(key, index=index)
-        if old_index and old_index != index:
+        if (old_index or options.get('slave', False)) and old_index != index:
             create_records(unify411, options)
 
 
@@ -364,19 +376,21 @@ def show(options):
 def listen(options):
     """Listen for services in consul datastore and create/delete/modify DNS entries according to.
 
-    Usage: listen [options] [-k path...] [-e file...]
+    Usage: listen [options] [-k path...] [-e file...] [-d domain...]
 
     Options:
         -c, --consul host               Consul host or ip [default: consul].
+        --datacenter datacenter         Datacenter filter. If not provided will use the default datacenter from the agent.
         -e, --external-file path        Path to an external hosts file(s) to merge.
-        -d, --datacenter datacenter     Datacenter filter. If not provided will use the default datacenter from the agent.
+        -d, --domain domain             Restrict to domain(s) only.
         -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
         -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
+        -n, --notify path               KV Path in consul datastore of the key to update when done. Can be used to trigger slaves updates.
         -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the external file is updated for example).
         --dryrun                        Don't do anything but print what it will do.
 
     """
-    unify411 = Unify411(consul_address=options["consul"], external_hosts=options["external-file"], datacenter=options["datacenter"], output=options["output-prefix"])
+    unify411 = Unify411(consul_address=options["consul"], external_hosts=options["external-file"], datacenter=options["datacenter"], output=options["output-prefix"], domains=options['domain'])
 
     threads = []
     threads.append(Thread(target=services_listen, kwargs={'unify411':unify411, 'options':options}))
@@ -396,6 +410,36 @@ def listen(options):
         print("\nBye.")
 
 
+@command("Slave mode, will only generate dnsmasq files from AWS.")
+def slave(options):
+    """Will act as a slave and will update local dnsmasq files from what we have in AWS. This is meant to be used on remote sites to populate a local dnsmasq.
+
+    Usage: slave [-c host -k path... -d domain... -o prefix -r cmd]
+
+    Options:
+        -c, --consul host               Consul host or ip [default: consul].
+        -d, --domain domain             The domain(s) on which to fetch DNS records.
+        -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the master has done update aws).
+        -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
+        -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
+
+    """
+    unify411 = Unify411(consul_address=options["consul"], output=options["output-prefix"], domains=options['domain'])
+
+    threads = []
+    for path in options['listen-key']:
+        threads.append(Thread(target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': path}))
+
+    for thread in threads:
+        thread.setDaemon(True)
+        thread.start()
+
+        # Main Run loop
+    try:
+        while True:
+            sleep(0.1)
+    except KeyboardInterrupt:
+        print("\nBye.")
 
 if __name__ == '__main__':
     command.dispatch()
