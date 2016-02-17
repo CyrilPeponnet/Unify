@@ -18,14 +18,18 @@ It will also run every 24h to check if some certs in the ouput dir need to be re
 ## Usage
 
 ```
-    Usage: whisper.py [options] <path_to_cert_folder>
+Whisper, a tool to retrieve letsencryp certificates for your docker applications.
+
+    Usage: whisper.py [options] [-d domain...] <path_to_cert_folder>
 
     Options:
       -h, --help            Show this screen.
       -c, --consul host     Consul host or ip [default: consul].
+      -d, --domain domain   The domain(s) you want to deal with.
       -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
       -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
-      -d, --debug           Set log level to debug.
+      --debug               Set log level to debug.
+      --dryrun              Don't initite challenge, just saying what it will do.
 ```
 
 In order to register to ACME servers, you will need to export a valid email address the first time as an environment variable. This will then create a `.acme` file in the output folder containing the private key to get connected to ACME servers when requesting certificates.
@@ -40,9 +44,11 @@ aws_secret_access_key = XXX
 
 ### As a container
 
-`docker run --rm  -ti  -v ~/.aws/credentials:/root/.aws/credentials -v certs:/app/certs/ -e CONSUL=<CONSUL_IP> -e DEBUG="-d" -e STAGING="-s" --name whisper whisper:latest`
+`docker run --rm  -ti  -v ~/.aws/credentials:/root/.aws/credentials -v certs:/app/certs/ -e CONSUL=<CONSUL_IP> -e DEBUG="--debug" -e DOMAIN="-d mydomain.tld" -e STAGING="-s" --name whisper whisper:latest`
 
-You can add `DEBUG="-d"` for debugging output and `STAGING="-s"` to use the ACME stagging backend (for testing and to avoid to hist the rate limit)
+You can add `DEBUG="--debug"` for debugging output and `STAGING="-s"` to use the ACME stagging backend (for testing and to avoid to hit the rate limit).
+
+The `DOMAIN="-d mydomain.tld` is to restrict `whisper` on the give domains.
 
 Regaring the `-n` notification part. it will by default update the key `whisper/updated` in your consul cluster. Then you can make `switchboard` to listen to event on that key and reload haproxy configuration.
 

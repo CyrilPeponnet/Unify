@@ -247,6 +247,7 @@ class WhisperManager(object):
         self.log.level = "debug" if options['--debug'] else "info"
         self.dryrun = options['--dryrun']
         self.domains = {}
+        self.restrict_to_domains = options['--domain']
         self.output_certs = options['<path_to_cert_folder>']
         self.letswhisper = Letswhisper(self.output_certs, self.log, options['--staging'])
         self.lock = Lock()
@@ -260,7 +261,7 @@ class WhisperManager(object):
         need_to_notify = False
         for hosts in multi_hosts, single_hosts:
             if hosts:
-                self.log.debug("Check certificates for %s" % ",".join(hosts), domain=domain)
+                self.log.debug("Update certificates for %s" % ",".join(hosts), domain=domain)
                 if self.dryrun:
                     continue
                 certs = self.letswhisper.update_certificates(domain, hosts)
@@ -288,6 +289,8 @@ class WhisperManager(object):
         """Do what's need to be done"""
         self.log.debug("========= Update certificates %s=========" % datetime.date.today())
         for domain, vhosts in self.domains.iteritems():
+            if self.restrict_to_domains and domain not in self.restrict_to_domains:
+                continue
             if self._rate_limit_helper():
                 self._update_certificates(domain, vhosts)
                 self._certs_issued_for_period['nb'] +=1
@@ -437,14 +440,15 @@ class WhisperManager(object):
 def main():
     """Whisper, a tool to retrieve letsencryp certificates for your docker applications.
 
-    Usage: whisper.py [options] <path_to_cert_folder>
+    Usage: whisper.py [options] [-d domain...] <path_to_cert_folder>
 
     Options:
       -h, --help            Show this screen.
       -c, --consul host     Consul host or ip [default: consul].
+      -d, --domain domain   The domain(s) you want to deal with.
       -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
       -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
-      -d, --debug           Set log level to debug.
+      --debug               Set log level to debug.
       --dryrun              Don't initite challenge, just saying what it will do.
     """
     options = docopt.docopt(main.__doc__)
