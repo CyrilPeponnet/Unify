@@ -4,7 +4,7 @@ This is how I deployed my docker architecture.
 
 Note: the SSL part is not done yet.
 
-## Requirements
+# Requirements
 
 * Centos 7
 * Puppet
@@ -48,15 +48,15 @@ pool {
         allow members of "swarmnodes";
 ```
 
-## Diagram
+# Diagram
 
 <p align="center">
     <img src="https://dl.dropboxusercontent.com/u/2663552/Github/Unify/Docker.jpg" width="400px">
 </p>
 
-## Consul deployement
+# Consul deployement
 
-### Servers
+## Servers
 
 Using [consul puppet classes](https://github.com/solarkennedy/puppet-consul):
 
@@ -80,7 +80,7 @@ And deployed to 3 nodes (a good consul cluster must be deployed on 3 / 5 nodes)
 
 Once deployed, bootstap the cluster with `consul join ip_node_1 ip_node_2 ip_node_3` (you may need to add `--rpc-addr=` with address of one node if not listening on localhost).
 
-### Agents
+## Agents
 
 One intance of agent will be deployed to each docker nodes.
 
@@ -102,8 +102,8 @@ consul::config_hash:
     - 10.0.0.213
 ```
 
-## Swarm deployement
-### Managers
+# Swarm deployement
+## Managers
 
 Using [docker puppet classes](https://github.com/garethr/garethr-docker):
 
@@ -128,7 +128,7 @@ The `swarm-cluster-01` value must be the same accross the nodes.
 
 Then I also create in dnsmasq conf file a A DNS record for each host pointing to `swarm.domain.tld`.
 
-### Nodes
+## Nodes
 
 Each docker node will have 2 static containers:
 * swarm agent
@@ -164,8 +164,8 @@ docker::run_instance::instance:
 
 **Note:**
 * The `--exec-opt native.cgroupdriver=cgroupfs` is needed for now because there is bug with docker 1.9 and systemd on centos 7.
-* In order to use multihost networking you must have a kernel > 3.18.
-For centos7 you can install it with:
+* In order to use multihost networking you must have a kernel > 3.18 (or use docker 1.10)
+For centos7 you can upgrade the kernel as follow:
 
 ```
 rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
@@ -175,7 +175,7 @@ yum --enablerepo=elrepo-kernel install kernel-ml
 grub2-set-default 0
 ```
 
-### Shared volumes
+# Shared volumes
 
 You will certainly to have persistency for your container. There is several way to do that but the easiest and safer way is to mount the shared volume on each docker nodes and use bind mounts. Example with glusterfs:
 
@@ -191,29 +191,33 @@ gluster_mount::mounts:
 ```
 
 
-## DNS generation and haproxy management
+# Deploying Unify containers
 
-Once a new container is registering to consul through registrator, it will trigger some actions:
-* trigger 411 container to update DNS records if needed
-* trigger switchboard container to update haproxy configuration
+Once a new container is pushed through `wireline` it get registered through consul via registrator, then it will trigger some actions:
+* trigger `411` container to update DNS records if needed
+* remote sites can update their local DNS records if a slave `411` instance is running.
+* trigger `switchboard` container to update haproxy configuration
+* trigger a SSL certificate request through `whisper`, deploy it and tell `switchboard` to reload.
 
 Workflow:
 <p align="center">
     <img src="https://dl.dropboxusercontent.com/u/2663552/Github/Unify/Unify%20workflow.png" width="400px">
 </p>
 
-### Workflow dns update
+## Workflow dns update
 
 <p align="center">
     <img src="https://dl.dropboxusercontent.com/u/2663552/Github/Unify/411.jpg" width="400px">
 </p>
 
-#### Implementation
+### Implementation
 DNS Updates are trigerred by 411 by watching consul for:
-* Watch for a change in service,
-* Watch for a change on a specific key in the kv datastore
+* a change in service,
+* a change on a specific key in the kv datastore
 
-#### Deployment
+### Deployment
+
+#### The main instance in `listen` mode
 
 411 Container must be hosted outside a swarm cluster. As it will be hosting a DNS servcer it must keep the same IP. If you want to make it part of your swarm cluster you will need to use VIP and custom keepalived feature in order to the IP to 'follow' the container if spawn on other hosts.
 
@@ -222,16 +226,17 @@ In my case it's hosted on a physical machine and deployed by puppet as following
 ```yaml
 docker::run_instance::instance:
   unify-411:
-    image: 'localhost:5000/unify/411'
+    image: 'registry.domain.tld:5000/unify/411'
     env:
-      - '"CONSUL=%{::ipaddress_ens2f1}"'
+      - "CONSUL=%{::ipaddress_ens2f1}"
       - '"KV=-k netadmin/updated"'
       - '"EXTERNAL=-e /etc/netadmin-dump"'
+      - '"NOTIFY=-n 411/updated"'
     ports:
       - "%{::ipaddress_ens2f1}:53:53/tcp"
       - "%{::ipaddress_ens2f1}:53:53/udp"
     volumes:
-      - "/shared_storage/boto.cfg:/etc/boto.cfg"
+      - "/shared_storage/.aws/credentials:/root/.aws/credentials"
       - "/shared_storage/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf"
       - "/shared_storage/dnsmasq/dnsmasq.d:/etc/dnsmasq.d"
     extra_parameters:
@@ -240,7 +245,38 @@ docker::run_instance::instance:
     depends: registry
 ```
 
-### Worflow haproxy update
+**Notes**: When using [docker puppet classes](https://github.com/garethr/garethr-docker), you want to pass evnv to your container that contains spaces you need to double quote them with single quote AND double quote (like `'"KV=-k netadmin/updated"'`. Because this class will generate the docker run cmd as follow `docker run -e "KV=-k netadmin/updated"...`. If you omit the `''`, the generated command will be `docker run -e KV=-k netadmin/updated...` and so will fail.
+
+
+#### Slave instances on remote sites
+
+In order to have local dns caching and reverse dns capability you can deploy `411` container on a remote site as slave.
+
+```yaml
+docker::run_instance::instance:
+  unify-411:
+    image: 'registry.domain.tld:5000/unify/411'
+    env:
+      - "CONSUL=%{::ipaddress_ens2f1}"
+      - "MODE=slave"
+      - '"KV=-k 411/updated"'
+      - '"DOMAIN=-d mydomain.tld"'
+    ports:
+      - "%{::ipaddress_ens2f1}:53:53/tcp"
+      - "%{::ipaddress_ens2f1}:53:53/udp"
+    volumes:
+      - "/shared_storage/.aws/credentials:/root/.aws/credentials"
+      - "/shared_storage/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf"
+      - "/shared_storage/dnsmasq/dnsmasq.d:/etc/dnsmasq.d"
+    extra_parameters:
+      - "--cap-add=NET_ADMIN"
+      - '--restart=always'
+```
+
+
+This instance will regenerate the dnsmasq when the `listen` container process will generate new AWS entries.
+
+## Worflow haproxy update
 
 <p align="center">
     <img src="https://dl.dropboxusercontent.com/u/2663552/Github/Unify/SwitchBoard.jpg" width="400px">
@@ -250,11 +286,9 @@ Each time there a modification in services, then dnsmasq configuration is change
 
 ### Haproxy how instances are deployed / updated
 
-#### Implementation
-
 When a new container is added with the proper `SERVICE_` medatada. Switchboard will update the haproxy configuration and reload haproxy service on each containers.
 
-#### Deployment
+### Deployment
 
 Switchboard containers are part of the swarm cluster. It means that we will create one container the first time and afterward we can scale it.
 
@@ -275,7 +309,7 @@ haproxy:
   environment:
     - "CONSUL=consul.service.domain.tld"
     - "affinity:container!=~unify_haproxy*"
-    - '"KV=-k whisper/updated"'
+    - "KV=-k whisper/updated"
   labels:
     type: haproxy
     SERVICE_TAGS: 'dns=sub.domain.tld'
@@ -311,6 +345,26 @@ Note that you cannot scale beyond the number of docker node you have.
 
 If you take a look at your dns record you should have a new entry for haproxy.sub..domain.tld poiting to one or more ip depending on how haproxy container you scaled.
 
+## Worklow SSL certificate generation
+
+When a new container contains the required tags, `whisper` will request a ssl certificate through letsencrypt PKI for it, deploy it and send a signal through consul to haproxy in order to reload it's configuration.
+
+### Deployment
+
+Using a docker-compose file
+
+```yaml
+whisper:
+  image: registry.domain.tld:5000/unify/whisper:latest
+  volumes:
+    - /shared_storage/haproxy/certs:/app/certs
+    - /shared_storage/.aws/credentials:/root/.aws/credentials
+  environment:
+    - "CONSUL=consul.service.domain.tld"
+    - "NOTIFY=-k whisper/updated"
+    - "ACME_REGISTER_EMAIL=valid@email.com"
+```
+
 ## Registry deployment
 
 To host private images we are using a private registry. In fact 3 running on the same shared storage. Defined like:
@@ -332,7 +386,7 @@ docker::run_instance::instance:
       - '--restart=always'
 ```
 
-This is important to set the same supersecret for each load balanced instances.
+This is important to set the same `supersecret` for each load balanced instances.
 
 Those are the backend registy, we can access them directly or use a fronted like [docker-registry-frontend](https://github.com/kwk/docker-registry-frontend)
 And deploy it as an application in the swarm cluster.
@@ -346,6 +400,8 @@ For the CA:
 For the certs:
 
 `docker run --rm -v $(pwd)/certs:/certs ehazlett/certm -d /certs server generate --host registry.domain.tld --host localhost --host 10.0.0.191 --host 10.0.0.213 --host 10.0.0.214 -o=domain.tld`
+
+But you can also use `whisper` for that purpose.
 
 Those 3 hosts are the 3 consul nodes. You can also add the A record for registry.domain.tld.  Then using `411.py -l` we can see:
 
