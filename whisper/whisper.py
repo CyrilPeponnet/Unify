@@ -22,14 +22,14 @@ from threading import Thread, Timer, Lock
 
 class Letswhisper(object):
     """This class will implement cert request / renew using acme protocol and DNS01 challenge"""
-    def __init__(self, path, logger, staging):
+    def __init__(self, acme_path, path, logger, staging):
         super(Letswhisper, self).__init__()
         if staging:
             self.acme_url = "https://acme-staging.api.letsencrypt.org/directory"
         else:
             self.acme_url = "https://acme-v01.api.letsencrypt.org/directory"
         self.path = path
-        self.acme_key = "%s.acme" % self.path if self.path.endswith('/') else "%s/.acme" % self.path
+        self.acme_key = acme_path
         self.log = logger
 
     def update_certificates(self, domain, vhosts):
@@ -249,14 +249,19 @@ class WhisperManager(object):
         self.domains = {}
         self.restrict_to_domains = options['--domain']
         self.output_certs = options['<path_to_cert_folder>']
-        self.letswhisper = Letswhisper(self.output_certs, self.log, options['--staging'])
+        self.letswhisper = Letswhisper(os.path.expanduser(options['--acme-key']), self.output_certs, self.log, options['--staging'])
         self.lock = Lock()
         self.kv_notification_path = options['--notify']
+        self.static_paths = options['--listen-path']
 
         self._spawn_listeners()
 
     def _update_certificates(self, domain, vhosts):
-        multi_hosts = [vhost for vhost, prop in vhosts.iteritems() if prop.get('SAN') and prop.get('update_cert')]
+        multi_hosts = []
+        for vhost, prop in vhosts.iteritems():
+            if prop.get('SAN') and prop.get('update_cert'):
+                multi_hosts = [vhost for vhost, prop in vhosts.iteritems() if prop.get('SAN')]
+                break
         single_hosts = [vhost for vhost, prop in vhosts.iteritems() if not prop.get('SAN') and prop.get('update_cert')]
         need_to_notify = False
         for hosts in multi_hosts, single_hosts:
@@ -298,7 +303,9 @@ class WhisperManager(object):
 
     def _spawn_listeners(self):
         """Starts listening thread and periodic thread"""
-        self._threaded_jobs['listen'] = Thread(target = self._services_listen)
+        self._threaded_jobs['services'] = Thread(target = self._services_listen)
+        for static in self.static_paths:
+            self._threaded_jobs[static] = Thread(target = self._kv_listen, kwargs={'path':static})
         self._threaded_jobs['timed']  = Timer(float(self._periodic_refresh_interval), self._timed_refresh)
         for name, job in self._threaded_jobs.iteritems():
             job.setDaemon(True)
@@ -323,10 +330,21 @@ class WhisperManager(object):
                 self.log.debug("Triggered by services")
                 self.refresh_all()
 
+    def _kv_listen(self, path):
+        index = None
+        while True:
+            old_index = index
+            index, data = self._consul.kv.get(path, index=index)
+            if old_index and old_index != index:
+                self.log.debug("Triggered by %s update" % path)
+                self.refresh_all()
+
     def refresh_all(self):
         with self.lock:
-            self.log.debug("Grab current services and certs")
+            self.log.debug("Grab current services, static entries and certs")
+            self.domains = {}
             self._refresh_services()
+            self._refresh_static()
             self._refresh_certs()
             self._converge()
 
@@ -437,19 +455,34 @@ class WhisperManager(object):
 
         parse_services(services)
 
-def main():
-    """Whisper, a tool to retrieve letsencryp certificates for your docker applications.
+    def _refresh_static(self):
+        """Get static entries from consul"""
+        for static in self.static_paths:
+            _, keys = self._consul.kv.get(static, keys=True)
+            for key in keys:
+                _, content = self._consul.kv.get(key)
+                use_SAN = True if content.get('Value', "") == "SAN" else False
+                dns, host = key.split("/")[-2:]
+                if dns not in self.domains:
+                    self.domains[dns] = {}
+                if host not in self.domains[dns]:
+                    self.domains[dns].update({host:{'SAN':use_SAN, 'update_cert':True}})
 
-    Usage: whisper.py [options] [-d domain...] <path_to_cert_folder>
+def main():
+    """Whisper, a tool to retrieve letsencryp certificates for your docker containers.
+
+    Usage: whisper.py [options] [-d domain...] [-l path...] <path_to_cert_folder>
 
     Options:
-      -h, --help            Show this screen.
-      -c, --consul host     Consul host or ip [default: consul].
-      -d, --domain domain   The domain(s) you want to deal with.
-      -n, --notify path     KV Path in consul datastore of the key to update [default: whisper/updated].
-      -s, --staging         Use staging instead of real servers (to avoid hitting the rate limit while testing).
-      --debug               Set log level to debug.
-      --dryrun              Don't initite challenge, just saying what it will do.
+      -h, --help                Show this screen.
+      -a, --acme-key path       The path to the .acme key used when register certificates [default: ~/.acme].
+      -c, --consul host         Consul host or ip [default: consul].
+      -l, --listen-path path    KV Path(s) in consul datastore to fetch static entries. Used when you want to create a certificate from an non published services.
+      -d, --domain domain       The domain(s) you want to deal with.
+      -n, --notify path         KV Path in consul datastore of the key to update [default: whisper/updated].
+      -s, --staging             Use staging instead of real servers (to avoid hitting the rate limit while testing).
+      --debug                   Set log level to debug.
+      --dryrun                  Don't initiate challenge, just saying what it will do.
     """
     options = docopt.docopt(main.__doc__)
 
