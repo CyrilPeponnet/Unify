@@ -124,7 +124,10 @@ class Unify411(object):
                  }
 
         if commit:
-            route53_client.change_resource_record_sets(HostedZoneId=zone_id, ChangeBatch=change)
+            try:
+                route53_client.change_resource_record_sets(HostedZoneId=zone_id, ChangeBatch=change)
+            except Exception as ex:
+                self.log.error("Failed to commit the action for the resource record sets", action=action, name=name, type=_type, values=values, ex=ex)
 
     def __find_parent_zone_for(self, zone):
         """ Helper to find if we have parent zone we can use"""
@@ -283,7 +286,7 @@ def create_records(unify411, options):
                 unify411.log.info("Running command", cmd=options.get('run-cmd'))
                 os.system(options.get('run-cmd'))
             if options.get('notify'):
-                unify411.log.info("Sending Notificaiton Event", path=options.get('notify'))
+                unify411.log.info("Sending Notification Event", path=options.get('notify'))
                 unify411.consul.kv.put(options.get('notify'), "ping")
 
 def services_listen(unify411, options):
