@@ -15,6 +15,7 @@ from collections import OrderedDict
 from threading import Thread, Lock
 from time import sleep
 
+
 class Logger(object):
     def __init__(self):
         self._out = sys.stdout
@@ -44,6 +45,7 @@ class Logger(object):
             event,
             formatted_data
         ))
+
 
 class Unify411(object):
     """Class to generate dns records"""
@@ -75,8 +77,8 @@ class Unify411(object):
         self.__retrieve_aws_records()
 
     def generate_output_file(self, file_path=None, slave=False, domains=[]):
-        out_a=""
-        out_cname=""
+        out_a = ""
+        out_cname = ""
         records = self.wanted_dns_records if not slave else self.current_dns_records
         for domain, entry in records.iteritems():
             if domains and domain not in domains:
@@ -102,32 +104,28 @@ class Unify411(object):
         for profile, actions in self.__compute_aws_actions().iteritems():
             for name, action in actions.iteritems():
                 if len(action['values']) == 1 and not re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', action['values'][0]):
-                    c_type="CNAME"
+                    c_type = "CNAME"
                 else:
-                    c_type="A"
+                    c_type = "A"
                 self.log.info("Changing Record Set",  action=action['action'], type=c_type, name=name, values=action['values'])
                 self._change_rr_sets(self.__aws_profiles[profile]['connection'], action['action'], self.__aws_profiles[profile]['zoneID'], name, c_type, action['values'], commit)
 
-
     def _change_rr_sets(self, route53_client, action, zone_id, name, _type, values, commit):
-        change = { "Changes": [
-                    {
-                        "Action": action,
-                        "ResourceRecordSet": {
-                            "Name": name,
-                            "Type": _type,
-                            "TTL": 30,
-                            "ResourceRecords": [ {"Value": "{}".format(value)} for value in values],
-                        }
-                    }
-                    ]
-                 }
+        change = {"Changes": [{"Action": action,
+                               "ResourceRecordSet": {"Name": name,
+                                                     "Type": _type,
+                                                     "TTL": 30,
+                                                     "ResourceRecords": [{"Value": "{}".format(value)} for value in values],
+                                                     }
+                               }
+                              ]
+                  }
 
         if commit:
             try:
                 route53_client.change_resource_record_sets(HostedZoneId=zone_id, ChangeBatch=change)
             except Exception as ex:
-                self.log.error("Failed to commit the action for the resource record sets", action=action, name=name, type=_type, values=values, ex=ex)
+                self.log.error("Failed to commit the action for the resource record sets", action=action, name=name, type=_type, values=values, change=change, ex=ex)
 
     def __find_parent_zone_for(self, zone):
         """ Helper to find if we have parent zone we can use"""
@@ -154,7 +152,7 @@ class Unify411(object):
                 route53_client = aws_client.client('route53')
                 for zone in route53_client.list_hosted_zones()['HostedZones']:
                     if zone['Name'] == parent_zone + '.':
-                        self.__aws_profiles[parent_zone] = {"connection":route53_client, "zoneID":zone['Id'] }
+                        self.__aws_profiles[parent_zone] = {"connection":route53_client, "zoneID":zone['Id']}
             else:
                 self.log.warn("No AWS profile found for %s as profile name." % (domain))
 
@@ -201,7 +199,7 @@ class Unify411(object):
             if len(tag.split("=", 1)) != 2:
                 continue
             k,v = tag.split("=", 1)
-            if not k in _tags.keys():
+            if k not in _tags.keys():
                 _tags[k] = v
             else:
                 if not isinstance(_tags[k], list):
@@ -265,6 +263,7 @@ class Unify411(object):
                         actions[domain][name]['action'] = "UPSERT"
         return actions
 
+
 def create_records(unify411, options):
     """This function will do what we need to do :)"""
     with unify411.lock:
@@ -289,6 +288,7 @@ def create_records(unify411, options):
                 unify411.log.info("Sending Notification Event", path=options.get('notify'))
                 unify411.consul.kv.put(options.get('notify'), "ping")
 
+
 def services_listen(unify411, options):
     """ Services listen runloop"""
     unify411.log.info("Listening for services...")
@@ -298,6 +298,7 @@ def services_listen(unify411, options):
         index, data = unify411.consul.catalog.services(index=index)
         if old_index != index:
             create_records(unify411, options)
+
 
 def kv_listen(unify411, options, key):
     """ KV listen runloop"""
@@ -321,7 +322,8 @@ class command(object):
     """
     registry = OrderedDict()
     short_docs = []
-    def __init__(self, doc = None):
+
+    def __init__(self, doc=None):
         self.short_docs.append(doc)
 
     def __call__(self, fn):
@@ -331,7 +333,7 @@ class command(object):
     @classmethod
     def dispatch(self, args=sys.argv[1:]):
         func_name = len(args) and args[0] or None
-        if func_name is None or not func_name in command.registry:
+        if func_name is None or func_name not in command.registry:
             sys.stderr.write(self.__doc__)
             for fn, short_doc in zip(command.registry, command.short_docs):
                 sys.stderr.write("\t" + fn + ((":\t" + short_doc) if short_doc else "") + "\n")
@@ -374,6 +376,7 @@ def show(options):
                         record_set = route53_client.list_resource_record_sets(HostedZoneId=zone['Id'], StartRecordName=record_set['NextRecordName'])
                     else:
                         break
+
 
 @command("Listen for services and create new records according to.")
 def listen(options):
@@ -446,4 +449,3 @@ def slave(options):
 
 if __name__ == '__main__':
     command.dispatch()
-
