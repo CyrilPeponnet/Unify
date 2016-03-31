@@ -110,11 +110,11 @@ class Unify411(object):
                 self.log.info("Changing Record Set",  action=action['action'], type=c_type, name=name, values=action['values'])
                 self._change_rr_sets(self.__aws_profiles[profile]['connection'], action['action'], self.__aws_profiles[profile]['zoneID'], name, c_type, action['values'], commit)
 
-    def _change_rr_sets(self, route53_client, action, zone_id, name, _type, values, commit):
+    def _change_rr_sets(self, route53_client, action, zone_id, name, _type, values, commit, ttl=30):
         change = {"Changes": [{"Action": action,
                                "ResourceRecordSet": {"Name": name,
                                                      "Type": _type,
-                                                     "TTL": 30,
+                                                     "TTL": ttl,
                                                      "ResourceRecords": [{"Value": "{}".format(value)} for value in values],
                                                      }
                                }
@@ -126,6 +126,9 @@ class Unify411(object):
                 route53_client.change_resource_record_sets(HostedZoneId=zone_id, ChangeBatch=change)
             except Exception as ex:
                 self.log.error("Failed to commit the action for the resource record sets", action=action, name=name, type=_type, values=values, change=change, ex=ex)
+                if ttl == 30 and action == "DELETE":
+                    self.log.debug("Trying the same with default boto TTL...")
+                    self._change_rr_sets(route53_client, action, zone_id, name, _type, values, commit, ttl=600)
 
     def __find_parent_zone_for(self, zone):
         """ Helper to find if we have parent zone we can use"""
