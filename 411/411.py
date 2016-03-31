@@ -127,7 +127,7 @@ class Unify411(object):
             except Exception as ex:
                 self.log.error("Failed to commit the action for the resource record sets", action=action, name=name, type=_type, values=values, change=change, ex=ex)
                 if ttl == 30 and action == "DELETE":
-                    self.log.debug("Trying the same with default boto TTL...")
+                    self.log.info("Trying the same with default boto TTL...")
                     self._change_rr_sets(route53_client, action, zone_id, name, _type, values, commit, ttl=600)
 
     def __find_parent_zone_for(self, zone):
