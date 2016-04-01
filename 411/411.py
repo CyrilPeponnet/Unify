@@ -51,17 +51,21 @@ class Unify411(object):
     """Class to generate dns records"""
     def __init__(self, consul_address, datacenter=None, external_hosts=[], zones=None, output=[], domains=[]):
         super(Unify411, self).__init__()
+        self.lock = Lock()
+        self.log = Logger()
         self.consul = consul.Consul(host=consul_address)
         self.external_hosts = external_hosts if external_hosts else []
         self.domains = domains
         self.output = output
-        if datacenter and datacenter not in self.consul.catalog.datacenters():
-            self.log.error("Error %s is not valid datacenter (valid dc: %s)" % (datacenter, ",".join(self.consul.catalog.datacenters())))
-            sys.exit(1)
+        if datacenter:
+            if datacenter in self.consul.catalog.datacenters():
+                self.datacenter = datacenter
+            else:
+                self.log.error("Error %s is not valid datacenter (valid dc: %s)" % (datacenter, ",".join(self.consul.catalog.datacenters())))
+                sys.exit(1)
         else:
             self.datacenter = self.consul.agent.self()['Config']['Datacenter']
-        self.lock = Lock()
-        self.log = Logger()
+        self.log.info("Connected to datacenter %s" % self.datacenter)
 
     def refresh(self):
         self.__get_wanted_records()
@@ -298,7 +302,7 @@ def services_listen(unify411, options):
     index = None
     while True:
         old_index = index
-        index, data = unify411.consul.catalog.services(index=index)
+        index, data = unify411.consul.catalog.services(index=index, dc=unify411.datacenter)
         if old_index != index:
             create_records(unify411, options)
 
@@ -309,7 +313,7 @@ def kv_listen(unify411, options, key):
     index = None
     while True:
         old_index = index
-        index, data = unify411.consul.kv.get(key, index=index)
+        index, data = unify411.consul.kv.get(key, index=index, dc=unify411.datacenter)
         if (old_index or options.get('slave', False)) and old_index != index:
             create_records(unify411, options)
 
@@ -423,21 +427,22 @@ def listen(options):
 def slave(options):
     """Will act as a slave and will update local dnsmasq files from what we have in AWS. This is meant to be used on remote sites to populate a local dnsmasq.
 
-    Usage: slave [-c host -k path... -d domain... -o prefix -r cmd]
+    Usage: slave [options] [-k path...] [-d domain...]
 
     Options:
         -c, --consul host               Consul host or ip [default: consul].
+        --datacenter datacenter         Datacenter filter. If not provided will use the default datacenter from the agent.
         -d, --domain domain             The domain(s) on which to fetch DNS records.
         -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the master has done update aws).
         -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
         -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
 
     """
-    unify411 = Unify411(consul_address=options["consul"], output=options["output-prefix"], domains=options['domain'])
+    unify411 = Unify411(consul_address=options["consul"], datacenter=options["datacenter"], output=options["output-prefix"], domains=options['domain'])
 
     threads = []
     for path in options['listen-key']:
-        threads.append(Thread(target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': path}))
+        threads.append(Thread(target=kv_listen, kwargs={'unify411':unify411, 'options':options, 'key': path}))
 
     for thread in threads:
         thread.setDaemon(True)

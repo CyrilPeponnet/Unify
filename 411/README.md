@@ -68,10 +68,11 @@ Listen for services in consul datastore and create/delete/modify DNS entries acc
 ```
 Will act as a slave and will update local dnsmasq files from what we have in AWS. This is meant to be used on remote sites to populate a local dnsmasq.
 
-    Usage: slave [-c host -k path... -d domain... -o prefix -r cmd]
+    Usage: slave [options] [-k path...] [-d domain...]
 
     Options:
         -c, --consul host               Consul host or ip [default: consul].
+        --datacenter datacenter         Datacenter filter. If not provided will use the default datacenter from the agent.
         -d, --domain domain             The domain(s) on which to fetch DNS records.
         -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the master has done update aws).
         -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
@@ -261,6 +262,3 @@ addn-hosts=/etc/dnsmasq.d/custom.hosts
 ```
 10.0.0.1 test.your.domain.tld test
 ```
-
-
-
