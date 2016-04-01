@@ -149,7 +149,11 @@ class Unify411(object):
     def __get_aws_profiles(self):
         """ This function will iterate over the potential profiles and try to create a connection. If it fails it will remove it."""
         self.__aws_profiles = {}
-        for domain in self.wanted_dns_records.keys():
+        if self.domains:
+            domains = self.domains
+        else:
+            domains = self.wanted_dns_records.keys()
+        for domain in domains:
             # if the current domain is a sub zone of an existing domain try the parent domain instead.
             parent_zone = self.__find_parent_zone_for(domain)
             if self.domains and parent_zone not in self.domains:
