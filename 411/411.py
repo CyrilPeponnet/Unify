@@ -53,7 +53,8 @@ class Unify411(object):
         super(Unify411, self).__init__()
         self.lock = Lock()
         self.log = Logger()
-        self.consul = consul.Consul(host=consul_address)
+        self._consul_host = consul_address
+        self.consul = consul.Consul(host=self._consul_host)
         self.external_hosts = external_hosts if external_hosts else []
         self.domains = domains
         self.output = output
@@ -306,7 +307,11 @@ def services_listen(unify411, options):
     index = None
     while True:
         old_index = index
-        index, data = unify411.consul.catalog.services(index=index, dc=unify411.datacenter)
+        try:
+            index, data = unify411.consul.catalog.services(index=index, dc=unify411.datacenter)
+        except Exception as ex:
+            unify411.log.warn("Error while fetching consul data: %s:" % ex)
+            unify411.consul = consul.Consul(host=unify411._consul_host)
         if old_index != index:
             create_records(unify411, options)
 
@@ -317,7 +322,11 @@ def kv_listen(unify411, options, key):
     index = None
     while True:
         old_index = index
-        index, data = unify411.consul.kv.get(key, index=index, dc=unify411.datacenter)
+        try:
+            index, data = unify411.consul.kv.get(key, index=index, dc=unify411.datacenter)
+        except Exception as ex:
+            unify411.log.warn("Error while fetching consul data: %s:" % ex)
+            unify411.consul = consul.Consul(host=unify411._consul_host)
         if (old_index or options.get('slave', False)) and old_index != index:
             create_records(unify411, options)
 
@@ -410,10 +419,10 @@ def listen(options):
     unify411 = Unify411(consul_address=options["consul"], external_hosts=options["external-file"], datacenter=options["datacenter"], output=options["output-prefix"], domains=options['domain'])
 
     threads = []
-    threads.append(Thread(target=services_listen, kwargs={'unify411':unify411, 'options':options}))
+    threads.append(Thread(name="Service Listen", target=services_listen, kwargs={'unify411':unify411, 'options':options}))
 
     for path in options['listen-key']:
-        threads.append(Thread(target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': path}))
+        threads.append(Thread(name="Listen key %s" % path, target=kv_listen,  kwargs={'unify411':unify411, 'options':options, 'key': path}))
 
     for thread in threads:
         thread.setDaemon(True)
