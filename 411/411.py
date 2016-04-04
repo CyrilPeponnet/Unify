@@ -310,7 +310,7 @@ def services_listen(unify411, options):
         try:
             index, data = unify411.consul.catalog.services(index=index, dc=unify411.datacenter)
         except Exception as ex:
-            unify411.log.warn("Error while fetching consul data: %s:" % ex)
+            unify411.log.warn("Error while fetching consul data: %s, Reconnecting to consul." % ex)
             unify411.consul = consul.Consul(host=unify411._consul_host)
         if old_index != index:
             create_records(unify411, options)
@@ -325,7 +325,7 @@ def kv_listen(unify411, options, key):
         try:
             index, data = unify411.consul.kv.get(key, index=index, dc=unify411.datacenter)
         except Exception as ex:
-            unify411.log.warn("Error while fetching consul data: %s:" % ex)
+            unify411.log.warn("Error while fetching consul data: %s, Reconnecting to consul." % ex)
             unify411.consul = consul.Consul(host=unify411._consul_host)
         if (old_index or options.get('slave', False)) and old_index != index:
             create_records(unify411, options)
