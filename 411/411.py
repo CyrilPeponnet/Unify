@@ -12,7 +12,7 @@ import sys
 
 from docopt import docopt
 from collections import OrderedDict
-from threading import Thread, Lock
+from threading import Thread, Lock, Timer
 from time import sleep
 
 
@@ -305,6 +305,8 @@ def services_listen(unify411, options):
     """ Services listen runloop"""
     unify411.log.info("Listening for services...")
     index = None
+    anti_flapping = None
+    flapping_window = 5
     while True:
         old_index = index
         try:
@@ -313,7 +315,9 @@ def services_listen(unify411, options):
             unify411.log.warn("Error while fetching consul data: %s, Reconnecting to consul." % ex)
             unify411.consul = consul.Consul(host=unify411._consul_host)
         if old_index != index:
-            create_records(unify411, options)
+            if not anti_flapping or not anti_flapping.isAlive():
+                anti_flapping = Timer(flapping_window, create_records, kwargs={"unify411": unify411, "options": options})
+                anti_flapping.start()
 
 
 def kv_listen(unify411, options, key):
