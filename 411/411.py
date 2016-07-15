@@ -207,16 +207,17 @@ class Unify411(object):
     def __parse_tags(self, tags):
         """ Return a dict of tags from array"""
         _tags = {}
-        for tag in tags:
-            if len(tag.split("=", 1)) != 2:
-                continue
-            k,v = tag.split("=", 1)
-            if k not in _tags.keys():
-                _tags[k] = v
-            else:
-                if not isinstance(_tags[k], list):
-                    _tags[k] = [_tags[k]]
-                _tags[k].append(v)
+        if tags:
+            for tag in tags:
+                if len(tag.split("=", 1)) != 2:
+                    continue
+                k,v = tag.split("=", 1)
+                if k not in _tags.keys():
+                    _tags[k] = v
+                else:
+                    if not isinstance(_tags[k], list):
+                        _tags[k] = [_tags[k]]
+                    _tags[k].append(v)
         return _tags
 
     def __retrieve_consul_records(self):
