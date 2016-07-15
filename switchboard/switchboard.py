@@ -8,10 +8,11 @@ import re
 import subprocess
 import sys
 
-from threading import Thread
+from threading import Thread, Timer
 from time import sleep
 
 _args = None
+
 
 @contextlib.contextmanager
 def file_or_stdout(filename=None):
@@ -66,17 +67,19 @@ def filter_services(svcs):
 def __convert_tags(tags):
     """ Return a dict of tags from array"""
     _tags = {}
-    for tag in tags:
-        if len(tag.split("=", 1)) != 2:
-            continue
-        k,v = tag.split("=", 1)
-        if not k in _tags.keys():
-            _tags[k] = v
-        else:
-            if not isinstance(_tags[k], list):
-                _tags[k] = [_tags[k]]
-            _tags[k].append(v)
+    if tags:
+        for tag in tags:
+            if len(tag.split("=", 1)) != 2:
+                continue
+            k,v = tag.split("=", 1)
+            if k not in _tags.keys():
+                _tags[k] = v
+            else:
+                if not isinstance(_tags[k], list):
+                    _tags[k] = [_tags[k]]
+                _tags[k].append(v)
     return _tags
+
 
 def parse_tags(services):
     """Parse tags and replace them with dict"""
@@ -89,7 +92,7 @@ def parse_tags(services):
             port = tags.get(proto, backend_guessed_port)
 
             # if nothing is provided but the backend port is 443 then bridge
-            if not 'http' in tags and not 'https' in tags and not 'tcp' in tags:
+            if 'http' not in tags and 'https' not in tags and 'tcp' not in tags:
                 if backend_guessed_port == '443':
                     proto = 'https'
                     tags['ssl'] = 'bridge'
@@ -102,7 +105,7 @@ def parse_tags(services):
                 proto = "tcp"
                 port = tags.get(proto, backend_guessed_port)
 
-            if not 'ssl' in tags:
+            if 'ssl' not in tags:
                 if proto == 'https':
                     if backend_guessed_port == '443':
                         tags['ssl'] = 'bridge'
@@ -115,9 +118,10 @@ def parse_tags(services):
         else:
             services.remove(service)
 
+
 def get_uniq_for_key(list, key, values=[]):
     """ Custom filter to return a uniq list of key values for"""
-    result =[]
+    result = []
     for item in list:
         v = item.get(key)
         if values and v and v in values and v not in result:
@@ -127,9 +131,11 @@ def get_uniq_for_key(list, key, values=[]):
             result.append(v)
     return result
 
+
 def is_list(value):
     """" Custom filter to check if var is a list"""
     return isinstance(value, list)
+
 
 def _generate_conf(_services, _template):
     """ Generate conf from template """
@@ -149,6 +155,7 @@ def _generate_conf(_services, _template):
     tpl = env.get_template(_template)
     return tpl.render(context)
 
+
 def render(filtered, args):
     print("> Regenerating haproxy configuration...")
     with file_or_stdout(args['--output']) as outf:
@@ -157,27 +164,38 @@ def render(filtered, args):
     if args['--run-cmd']:
         subprocess.call(args['--run-cmd'], shell=True)
 
+
 def get_services(_consul):
     services = []
     index, catalog = _consul.catalog.services()
-    for service in catalog :
+    for service in catalog:
         index, instances = _consul.catalog.service(service=service)
         for instance in instances:
-            services.append({'name': instance['ServiceName'], \
-                             'ip': instance['ServiceAddress'], \
-                             'port': instance['ServicePort'], \
-                             'id': instance['ServiceID'], \
+            services.append({'name': instance['ServiceName'],
+                             'ip':   instance['ServiceAddress'],
+                             'port': instance['ServicePort'],
+                             'id':   instance['ServiceID'],
                              'tags': instance['ServiceTags']})
     return services
 
+
 def services_listen(consul):
     index = None
+    anti_flapping = None
+    flapping_window = 5
+
+    def process():
+        filtered = filter_services(get_services(consul))
+        render(filtered, _args)
+
     while True:
         old_index = index
         index, data = consul.catalog.services(index=index)
         if old_index != index:
-            filtered = filter_services(get_services(consul))
-            render(filtered, _args)
+            if not anti_flapping or not anti_flapping.isAlive():
+                anti_flapping = Timer(flapping_window, process)
+                anti_flapping.start()
+
 
 def kv_listen(consul, key):
     index = None
@@ -188,6 +206,7 @@ def kv_listen(consul, key):
         if old_index and old_index != index:
             filtered = filter_services(get_services(consul))
             render(filtered, _args)
+
 
 def main():
     """Switchboard, generate HAProxy configuration for your docker applications.
@@ -212,7 +231,7 @@ def main():
 
     _consul = consul.Consul(_args['--consul'])
 
-    ts = Thread(target = services_listen, kwargs={'consul': _consul})
+    ts = Thread(target=services_listen, kwargs={'consul': _consul})
     ts.setDaemon(True)
     ts.start()
 
@@ -231,4 +250,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
