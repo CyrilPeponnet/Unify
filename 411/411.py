@@ -12,8 +12,42 @@ import sys
 
 from docopt import docopt
 from collections import OrderedDict
-from threading import Thread, Lock, Timer
+from threading import Thread, Lock
+from Queue import Queue
 from time import sleep
+
+
+class AntiFlapping(object):
+    """
+    AntiFlapping class to process event in a timely maneer
+    """
+    def __init__(self, window):
+        self.window = int(window)
+        self.tasks = Queue(maxsize=1)
+        self._window_ended = True
+        self._thread = Thread(name="AntiFlapping", target=self._run)
+        self._thread.start()
+
+    def newEvent(self, func, kwargs={}):
+        """
+        newEvent Triggered.
+        """
+        if not self.tasks.full() and self._window_ended:
+            self.tasks.put({'func': func, 'args':kwargs})
+
+    def _run(self):
+        """
+        internal runloop that will fire tasks in order.
+        """
+        while True:
+            task = self.tasks.get()
+            self._window_ended = False
+            sleep(self.window)
+            self._window_ended = True
+            if task['args']:
+                task['func'](**task['args'])
+            else:
+                task['func']()
 
 
 class Logger(object):
@@ -306,8 +340,7 @@ def services_listen(unify411, options):
     """ Services listen runloop"""
     unify411.log.info("Listening for services...")
     index = None
-    anti_flapping = None
-    flapping_window = 5
+    anti_flapping = AntiFlapping(options['event-threshold'])
     while True:
         old_index = index
         try:
@@ -315,10 +348,10 @@ def services_listen(unify411, options):
         except Exception as ex:
             unify411.log.warn("Error while fetching consul data: %s, Reconnecting to consul." % ex)
             unify411.consul = consul.Consul(host=unify411._consul_host)
+            continue
+
         if old_index != index:
-            if not anti_flapping or not anti_flapping.isAlive():
-                anti_flapping = Timer(flapping_window, create_records, kwargs={"unify411": unify411, "options": options})
-                anti_flapping.start()
+            anti_flapping.newEvent(create_records, kwargs={"unify411": unify411, "options": options})
 
 
 def kv_listen(unify411, options, key):
@@ -418,6 +451,7 @@ def listen(options):
         -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
         -n, --notify path               KV Path in consul datastore of the key to update when done. Can be used to trigger slaves updates.
         -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the external file is updated for example).
+        --event-threshold second        Process events by batch with a threshold window (in second) [default: 10].
         --dryrun                        Don't do anything but print what it will do.
 
     """
@@ -454,6 +488,7 @@ def slave(options):
         -k, --listen-key path           KV Path(s) in consul datastore to listen to, in order to trigger a DNS update. (Used when the master has done update aws).
         -o, --output-prefix prefix      The prefix for output files that will be generated for dnsmasq. If not provided will print the output to stdout.
         -r, --run-cmd cmd               The command to run when new dns records are done. Will be executed in a shell.
+        --event-threshold second        Process events by batch with a threshold window (in second) [default: 10].
 
     """
     unify411 = Unify411(consul_address=options["consul"], datacenter=options["datacenter"], output=options["output-prefix"], domains=options['domain'])

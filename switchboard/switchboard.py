@@ -8,10 +8,44 @@ import re
 import subprocess
 import sys
 
-from threading import Thread, Timer
+from threading import Thread
+from Queue import Queue
 from time import sleep
 
 _args = None
+
+
+class AntiFlapping(object):
+    """
+    AntiFlapping class to process event in a timely maneer
+    """
+    def __init__(self, window):
+        self.window = window
+        self.tasks = Queue(maxsize=1)
+        self._window_ended = True
+        self._thread = Thread(name="AntiFlapping", target=self._run)
+        self._thread.start()
+
+    def newEvent(self, func, kwargs={}):
+        """
+        newEvent Triggered.
+        """
+        if not self.tasks.full() and self._window_ended:
+            self.tasks.put({'func': func, 'args':kwargs})
+
+    def _run(self):
+        """
+        internal runloop that will fire tasks in order.
+        """
+        while True:
+            task = self.tasks.get()
+            self._window_ended = False
+            sleep(self.window)
+            self._window_ended = True
+            if task['args']:
+                task['func'](**task['args'])
+            else:
+                task['func']()
 
 
 @contextlib.contextmanager
@@ -179,10 +213,9 @@ def get_services(_consul):
     return services
 
 
-def services_listen(consul):
+def services_listen(window, consul):
     index = None
-    anti_flapping = None
-    flapping_window = 5
+    anti_flapping = AntiFlapping(window)
 
     def process():
         filtered = filter_services(get_services(consul))
@@ -192,9 +225,7 @@ def services_listen(consul):
         old_index = index
         index, data = consul.catalog.services(index=index)
         if old_index != index:
-            if not anti_flapping or not anti_flapping.isAlive():
-                anti_flapping = Timer(flapping_window, process)
-                anti_flapping.start()
+            anti_flapping.newEvent(process)
 
 
 def kv_listen(consul, key):
@@ -224,6 +255,8 @@ def main():
       --has tag               Only render services that have (all/the) specified tag(s).
       --has-not tag           Only render services that don't have any of (all/the) specified tag(s).
       -b, --bind-ip ip        Set the listening ip address [default: 0.0.0.0].
+      --event-threshold s     Process events by batch with a threshold window (in second) [default: 10].
+
     """
     global _args
 
@@ -231,7 +264,7 @@ def main():
 
     _consul = consul.Consul(_args['--consul'])
 
-    ts = Thread(target=services_listen, kwargs={'consul': _consul})
+    ts = Thread(target=services_listen, kwargs={'window': int(_args['--event-threshold']), 'consul': _consul})
     ts.setDaemon(True)
     ts.start()
 
